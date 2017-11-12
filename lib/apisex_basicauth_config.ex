@@ -1,10 +1,17 @@
 defmodule APISexBasicAuthConfig do
-  @type t :: %__MODULE__{clients: list({String.t, String.t}), callback: nil | (String.t, String.t -> String.t), advertise_wwwauthenticate_header: boolean(), realm: String.t}
+  @type t :: %__MODULE__{
+    clients: list({String.t, String.t}),
+    callback: nil | (String.t, String.t -> String.t),
+    advertise_wwwauthenticate_header: boolean(),
+    realm: String.t,
+    halt_on_authentication_failure: boolean()
+  }
 
   defstruct clients: [],
             callback: nil,
             advertise_wwwauthenticate_header: true,
-            realm: "Default realm"
+            realm: "Default realm",
+            halt_on_authentication_failure: true
 
   def init({app, configkey}) do
     conf = Application.get_env(app, configkey)
