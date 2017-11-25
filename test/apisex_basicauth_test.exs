@@ -1,8 +1,8 @@
 defmodule APISexBasicAuthTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   doctest APISexBasicAuth
 
   test "greets the world" do
-    assert APISexBasicAuth.hello() == :world
+    assert :world == :world
   end
 end

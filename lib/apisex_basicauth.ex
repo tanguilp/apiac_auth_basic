@@ -16,8 +16,8 @@ defmodule APISexBasicAuth do
   # Only one header value should be returned
   # (https://stackoverflow.com/questions/29282578/multiple-http-authorization-headers)
   defp call_parse(conn, opts, ["Basic " <> auth_token]) do
-    # rfc7235 syntax allows multiple spaces before the base64 token
-    case Base.decode64(String.trim_leading(auth_token, " ")) do
+    # rfc7235 syntax allows multiple spaces before the base64 token68
+    case Base.decode64(String.trim_leading(auth_token, "\s")) do
       {:ok, client_id_secret} -> parse_client_id_secret(conn, opts, client_id_secret)
       :error -> basic_authenticate_failure(conn, opts)
     end
