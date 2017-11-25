@@ -1,7 +1,7 @@
 defmodule APISexBasicAuthConfig do
   @type t :: %__MODULE__{
     clients: list({String.t, String.t}),
-    callback: nil | (String.t, String.t -> String.t),
+    callback: nil | (String.t, String.t -> String.t | nil),
     advertise_wwwauthenticate_header: boolean(),
     realm: String.t,
     halt_on_authentication_failure: boolean()
