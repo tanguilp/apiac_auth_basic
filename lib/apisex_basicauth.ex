@@ -55,9 +55,27 @@ defmodule APISexBasicAuth do
   end
 
   defp basic_authenticate_failure(conn, opts) do
-    conn = if opts.halt_on_authentication_failure, do: Plug.Conn.halt(conn), else: conn
+    conn =
+      if opts.halt_on_authentication_failure do
+        conn
+        |> Plug.Conn.put_status(:unauthorized)
+        |> set_WWWAuthenticate_challenge(opts)
+        |> Plug.Conn.halt
+      else
+        conn
+      end
 
     conn
+  end
+
+  defp set_WWWAuthenticate_challenge(conn, opts) do
+    #TODO: check realm's string conformance with RFC7230 section 3.2.6
+    escaped_realm = opts.realm
+
+    case Plug.Conn.get_resp_header(conn, "www-authenticate") do
+      nil -> Plug.Conn.put_resp_header(conn, "www-authenticate", "Basic realm=\"#{escaped_realm}\"")
+      header_val -> Plug.Conn.put_resp_header(conn, "www-authenticate", header_val <> ", Basic realm=\"#{escaped_realm}\"")
+    end
   end
 
   # prevents timing attacks

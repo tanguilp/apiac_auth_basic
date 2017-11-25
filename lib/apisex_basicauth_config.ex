@@ -15,16 +15,26 @@ defmodule APISexBasicAuthConfig do
 
   def init({app, configkey}) do
     conf = Application.get_env(app, configkey)
-    %__MODULE__{
-      clients: Keyword.get(conf, :clients, []),
-      callback: Keyword.get(conf, :callback),
-      advertise_wwwauthenticate_header:
-        Keyword.get(conf, :advertise_wwwauthenticate_header, true),
-      realm: Keyword.get(conf, :realm)
-    }
+    init_check_values(
+      %__MODULE__{
+        clients: Keyword.get(conf, :clients, []),
+        callback: Keyword.get(conf, :callback),
+        advertise_wwwauthenticate_header:
+          Keyword.get(conf, :advertise_wwwauthenticate_header, true),
+        realm: Keyword.get(conf, :realm)
+      }
+    )
   end
 
   def init(conf) when is_list(conf) do
-    struct(__MODULE__, conf)
+    init_check_values(struct(__MODULE__, conf))
+  end
+
+  defp init_check_values(conf) do
+    if Regex.match?(APISexBasicAuthUtils.rfc7230_quotedstring_regex(), conf.realm) do
+      conf
+    else
+      raise "Invalid realm string (do not conform with RFC7230 quoted string)"
+    end
   end
 end
