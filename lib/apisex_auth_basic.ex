@@ -67,19 +67,37 @@ defmodule APISexAuthBasic do
     Plug.Conn.put_private(conn, :apisex, result)
   end
 
-  defp authenticate_failure(conn, opts) do
-    conn =
-      if opts.halt_on_authentication_failure == true do
-        conn
-        |> Plug.Conn.put_status(:unauthorized)
-        |> set_WWWAuthenticate_challenge(opts)
-        |> Plug.Conn.halt
-      else
-        conn
-      end
-
+  defp authenticate_failure(conn,
+                            %APISexAuthBasicConfig{
+                              advertise_wwwauthenticate_header: true,
+                              halt_on_authentication_failure: true
+                            } = opts) do
     conn
+    |> set_WWWAuthenticate_challenge(opts)
+    |> Plug.Conn.put_status(:unauthorized)
+    |> Plug.Conn.halt
   end
+
+  defp authenticate_failure(conn,
+                            %APISexAuthBasicConfig{
+                              advertise_wwwauthenticate_header: false,
+                              halt_on_authentication_failure: true
+                            }) do
+    conn
+    |> Plug.Conn.put_status(:unauthorized)
+    |> Plug.Conn.halt
+  end
+
+  defp authenticate_failure(conn,
+                            %APISexAuthBasicConfig{
+                              advertise_wwwauthenticate_header: true,
+                              halt_on_authentication_failure: false
+                            } = opts) do
+    conn
+    |> set_WWWAuthenticate_challenge(opts)
+  end
+
+  defp authenticate_failure(conn, _opts), do: conn
 
   defp set_WWWAuthenticate_challenge(conn, opts) do
     case Plug.Conn.get_resp_header(conn, "www-authenticate") do
