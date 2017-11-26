@@ -1,8 +1,96 @@
 defmodule APISexBasicAuthTest do
   use ExUnit.Case, async: true
+  use Plug.Test
   doctest APISexBasicAuth
 
-  test "greets the world" do
-    assert :world == :world
+  @valid_client_id "my_client"
+  @valid_client_secret "My secret"
+  @test_realm_name "It's closed"
+
+  test "Correct credentials (inlined conf)" do
+    conn =
+      conn(:get, "/")
+      |> put_req_header("authorization", "Basic " <> Base.encode64(@valid_client_id <> ":" <> @valid_client_secret))
+      |> APISexBasicAuth.call(%APISexBasicAuthConfig{clients: [{@valid_client_id, @valid_client_secret}]})
+
+    refute conn.status == 401
+    refute conn.halted == true
+  end
+
+  test "Correct credentials (inlined conf) with additional white spaces" do
+    conn =
+      conn(:get, "/")
+      |> put_req_header("authorization", "Basic      " <> Base.encode64(@valid_client_id <> ":" <> @valid_client_secret))
+      |> APISexBasicAuth.call(%APISexBasicAuthConfig{clients: [{@valid_client_id, @valid_client_secret}]})
+
+    refute conn.status == 401
+    refute conn.halted == true
+  end
+
+  test "Incorrect credentials (inlined conf)" do
+    conn =
+      conn(:get, "/")
+      |> put_req_header("authorization", "Basic " <> Base.encode64(@valid_client_id <> ":" <> "invalid_secret"))
+      |> APISexBasicAuth.call(%APISexBasicAuthConfig{clients: [{@valid_client_id, @valid_client_secret}]})
+
+    assert conn.status == 401
+    assert conn.halted == true
+  end
+
+  test "Check www-authenticate header (inlined conf)" do
+    conn =
+      conn(:get, "/")
+      |> put_req_header("authorization", "Basic " <> Base.encode64(@valid_client_id <> ":" <> "invalid_secret"))
+      |> APISexBasicAuth.call(%APISexBasicAuthConfig{realm: @test_realm_name})
+
+    assert ["Basic realm=\"#{@test_realm_name}\""] == get_resp_header(conn, "www-authenticate")
+  end
+
+  test "Check www-authenticate not set (inlined conf)" do
+    conn =
+      conn(:get, "/")
+      |> put_req_header("authorization", "Basic " <> Base.encode64(@valid_client_id <> ":" <> "invalid_secret"))
+      |> APISexBasicAuth.call(%APISexBasicAuthConfig{advertise_wwwauthenticate_header: false})
+
+    refute ["Basic realm=\"#{@test_realm_name}\""] == get_resp_header(conn, "www-authenticate")
+  end
+
+  test "Check plug not halted (inlined conf)" do
+    conn =
+      conn(:get, "/")
+      |> put_req_header("authorization", "Basic " <> Base.encode64(@valid_client_id <> ":" <> "invalid_secret"))
+      |> APISexBasicAuth.call(%APISexBasicAuthConfig{halt_on_authentication_failure: false})
+
+    refute conn.halted == true
+  end
+
+  test "Check incorrect authentication scheme (inlined conf)" do
+    conn =
+      conn(:get, "/")
+      |> put_req_header("authorization", "Bearer xaidfnaz")
+      |> APISexBasicAuth.call(%APISexBasicAuthConfig{})
+
+    assert conn.status == 401
+    assert conn.halted == true
+  end
+
+  test "Check function callback returning correct secret (inlined conf)" do
+    conn =
+      conn(:get, "/")
+      |> put_req_header("authorization", "Basic " <> Base.encode64(@valid_client_id <> ":" <> @valid_client_secret))
+      |> APISexBasicAuth.call(%APISexBasicAuthConfig{callback: fn _realm, _client_id -> @valid_client_secret end})
+
+    refute conn.status == 401
+    refute conn.halted == true
+  end
+
+  test "Check function callback returning invalid secret (inlined conf)" do
+    conn =
+      conn(:get, "/")
+      |> put_req_header("authorization", "Basic " <> Base.encode64(@valid_client_id <> ":" <> @valid_client_secret))
+      |> APISexBasicAuth.call(%APISexBasicAuthConfig{callback: fn _realm, _client_id -> "invalid client_secret" end})
+
+    assert conn.status == 401
+    assert conn.halted == true
   end
 end

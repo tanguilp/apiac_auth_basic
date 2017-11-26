@@ -9,7 +9,7 @@ defmodule APISexBasicAuth do
   end
 
   @spec call(Plug.Conn, APISexBasicAuthConfig.t) :: Plug.Conn
-  def call(conn, opts) do
+  def call(conn, %APISexBasicAuthConfig{} = opts) do
     call_parse(conn, opts, Plug.Conn.get_req_header(conn, "authorization"))
   end
 
@@ -69,7 +69,7 @@ defmodule APISexBasicAuth do
 
   defp authenticate_failure(conn, opts) do
     conn =
-      if opts.halt_on_authentication_failure do
+      if opts.halt_on_authentication_failure == true do
         conn
         |> Plug.Conn.put_status(:unauthorized)
         |> set_WWWAuthenticate_challenge(opts)
@@ -83,8 +83,8 @@ defmodule APISexBasicAuth do
 
   defp set_WWWAuthenticate_challenge(conn, opts) do
     case Plug.Conn.get_resp_header(conn, "www-authenticate") do
-      nil -> Plug.Conn.put_resp_header(conn, "www-authenticate", "Basic realm=\"#{opts.realm}\"")
-      header_val -> Plug.Conn.put_resp_header(conn, "www-authenticate", header_val <> ", Basic realm=\"#{opts.realm}\"")
+      [] -> Plug.Conn.put_resp_header(conn, "www-authenticate", "Basic realm=\"#{opts.realm}\"")
+      [header_val|_] -> Plug.Conn.put_resp_header(conn, "www-authenticate", header_val <> ", Basic realm=\"#{opts.realm}\"")
     end
   end
 

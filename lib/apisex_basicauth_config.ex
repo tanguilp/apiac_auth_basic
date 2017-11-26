@@ -23,7 +23,8 @@ defmodule APISexBasicAuthConfig do
         callback: Keyword.get(conf, :callback, nil),
         advertise_wwwauthenticate_header:
           Keyword.get(conf, :advertise_wwwauthenticate_header, true),
-        realm: Keyword.get(conf, :realm, @default_realm_name)
+        realm: Keyword.get(conf, :realm, @default_realm_name),
+        halt_on_authentication_failure: Keyword.get(conf, :halt_on_authentication_failure, true)
       }
     )
   end
