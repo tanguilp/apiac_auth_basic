@@ -1,6 +1,6 @@
 use Mix.Config
 
-config :apisex_basicauth,
+config :apisex_auth_basic,
   test_realm:
   [
     clients:

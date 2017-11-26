@@ -1,9 +1,9 @@
-defmodule APISexBasicAuth.Mixfile do
+defmodule APISexAuthBasic.Mixfile do
   use Mix.Project
 
   def project do
     [
-      app: :apisex_basicauth,
+      app: :apisex_auth_basic,
       version: "0.1.0",
       elixir: "~> 1.5",
       start_permanent: Mix.env == :prod,

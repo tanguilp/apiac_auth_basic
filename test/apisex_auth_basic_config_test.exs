@@ -1,19 +1,19 @@
-defmodule APISexBasicAuthConfigTest do
+defmodule APISexAuthBasicConfigTest do
   use ExUnit.Case, async: true
-  doctest APISexBasicAuth
+  doctest APISexAuthBasic
 
   test "configuration init" do
-    assert %APISexBasicAuthConfig{} = APISexBasicAuthConfig.init([])
+    assert %APISexAuthBasicConfig{} = APISexAuthBasicConfig.init([])
   end
 
   test "configuration init with invalid realm" do
     assert_raise RuntimeError, fn ->
-      APISexBasicAuthConfig.init(realm: ~s(Invalid " realm name))
+      APISexAuthBasicConfig.init(realm: ~s(Invalid " realm name))
     end
   end
 
   test "configuration from conf file" do
-    opts = APISexBasicAuthConfig.init({:apisex_basicauth, :test_realm})
+    opts = APISexAuthBasicConfig.init({:apisex_auth_basic, :test_realm})
 
     assert opts.realm == "Test realm"
     assert opts.advertise_wwwauthenticate_header == false

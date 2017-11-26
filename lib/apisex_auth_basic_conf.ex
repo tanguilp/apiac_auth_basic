@@ -1,4 +1,4 @@
-defmodule APISexBasicAuthConfig do
+defmodule APISexAuthBasicConfig do
   @type t :: %__MODULE__{
     clients: list({String.t, String.t}),
     callback: nil | (String.t, String.t -> String.t | nil),
@@ -40,7 +40,7 @@ defmodule APISexBasicAuthConfig do
     #    syntax.  Recipients might have to support both token and
     #    quoted-string syntax for maximum interoperability with existing
     #    clients that have been accepting both notations for a long time.
-    if Regex.match?(APISexBasicAuthUtils.rfc7230_quotedstring_regex(), conf.realm) do
+    if Regex.match?(APISexAuthBasicUtils.rfc7230_quotedstring_regex(), conf.realm) do
       conf
     else
       raise "Invalid realm string (do not conform with RFC7230 quoted string)"

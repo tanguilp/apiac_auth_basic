@@ -1,15 +1,15 @@
-defmodule APISexBasicAuth do
+defmodule APISexAuthBasic do
   @behaviour Plug
 
   use Bitwise
 
-  @spec init(Plug.opts) :: APISexBasicAuthConfig.t
+  @spec init(Plug.opts) :: APISexAuthBasicConfig.t
   def init(opts) do
-    APISexBasicAuthConfig.init(opts)
+    APISexAuthBasicConfig.init(opts)
   end
 
-  @spec call(Plug.Conn, APISexBasicAuthConfig.t) :: Plug.Conn
-  def call(conn, %APISexBasicAuthConfig{} = opts) do
+  @spec call(Plug.Conn, APISexAuthBasicConfig.t) :: Plug.Conn
+  def call(conn, %APISexAuthBasicConfig{} = opts) do
     call_parse(conn, opts, Plug.Conn.get_req_header(conn, "authorization"))
   end
 
@@ -34,7 +34,7 @@ defmodule APISexBasicAuth do
     end
   end
 
-  defp authenticate(conn, opts = %APISexBasicAuthConfig{callback: callback}, client_id, client_secret) when is_function(callback) do
+  defp authenticate(conn, opts = %APISexAuthBasicConfig{callback: callback}, client_id, client_secret) when is_function(callback) do
     case callback.(opts.realm, client_id) do
       nil -> authenticate_failure(conn, opts)
       val -> if secure_compare(client_secret, val) do

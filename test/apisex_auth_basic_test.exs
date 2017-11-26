@@ -1,7 +1,7 @@
-defmodule APISexBasicAuthTest do
+defmodule APISexAuthBasicTest do
   use ExUnit.Case, async: true
   use Plug.Test
-  doctest APISexBasicAuth
+  doctest APISexAuthBasic
 
   @valid_client_id "my_client"
   @valid_client_secret "My secret"
@@ -11,7 +11,7 @@ defmodule APISexBasicAuthTest do
     conn =
       conn(:get, "/")
       |> put_req_header("authorization", "Basic " <> Base.encode64(@valid_client_id <> ":" <> @valid_client_secret))
-      |> APISexBasicAuth.call(%APISexBasicAuthConfig{clients: [{@valid_client_id, @valid_client_secret}]})
+      |> APISexAuthBasic.call(%APISexAuthBasicConfig{clients: [{@valid_client_id, @valid_client_secret}]})
 
     refute conn.status == 401
     refute conn.halted == true
@@ -21,7 +21,7 @@ defmodule APISexBasicAuthTest do
     conn =
       conn(:get, "/")
       |> put_req_header("authorization", "Basic      " <> Base.encode64(@valid_client_id <> ":" <> @valid_client_secret))
-      |> APISexBasicAuth.call(%APISexBasicAuthConfig{clients: [{@valid_client_id, @valid_client_secret}]})
+      |> APISexAuthBasic.call(%APISexAuthBasicConfig{clients: [{@valid_client_id, @valid_client_secret}]})
 
     refute conn.status == 401
     refute conn.halted == true
@@ -31,7 +31,7 @@ defmodule APISexBasicAuthTest do
     conn =
       conn(:get, "/")
       |> put_req_header("authorization", "Basic " <> Base.encode64(@valid_client_id <> ":" <> "invalid_secret"))
-      |> APISexBasicAuth.call(%APISexBasicAuthConfig{clients: [{@valid_client_id, @valid_client_secret}]})
+      |> APISexAuthBasic.call(%APISexAuthBasicConfig{clients: [{@valid_client_id, @valid_client_secret}]})
 
     assert conn.status == 401
     assert conn.halted == true
@@ -41,7 +41,7 @@ defmodule APISexBasicAuthTest do
     conn =
       conn(:get, "/")
       |> put_req_header("authorization", "Basic " <> Base.encode64(@valid_client_id <> ":" <> "invalid_secret"))
-      |> APISexBasicAuth.call(%APISexBasicAuthConfig{realm: @test_realm_name})
+      |> APISexAuthBasic.call(%APISexAuthBasicConfig{realm: @test_realm_name})
 
     assert ["Basic realm=\"#{@test_realm_name}\""] == get_resp_header(conn, "www-authenticate")
   end
@@ -50,7 +50,7 @@ defmodule APISexBasicAuthTest do
     conn =
       conn(:get, "/")
       |> put_req_header("authorization", "Basic " <> Base.encode64(@valid_client_id <> ":" <> "invalid_secret"))
-      |> APISexBasicAuth.call(%APISexBasicAuthConfig{advertise_wwwauthenticate_header: false})
+      |> APISexAuthBasic.call(%APISexAuthBasicConfig{advertise_wwwauthenticate_header: false})
 
     refute ["Basic realm=\"#{@test_realm_name}\""] == get_resp_header(conn, "www-authenticate")
   end
@@ -59,7 +59,7 @@ defmodule APISexBasicAuthTest do
     conn =
       conn(:get, "/")
       |> put_req_header("authorization", "Basic " <> Base.encode64(@valid_client_id <> ":" <> "invalid_secret"))
-      |> APISexBasicAuth.call(%APISexBasicAuthConfig{halt_on_authentication_failure: false})
+      |> APISexAuthBasic.call(%APISexAuthBasicConfig{halt_on_authentication_failure: false})
 
     refute conn.halted == true
   end
@@ -68,7 +68,7 @@ defmodule APISexBasicAuthTest do
     conn =
       conn(:get, "/")
       |> put_req_header("authorization", "Bearer xaidfnaz")
-      |> APISexBasicAuth.call(%APISexBasicAuthConfig{})
+      |> APISexAuthBasic.call(%APISexAuthBasicConfig{})
 
     assert conn.status == 401
     assert conn.halted == true
@@ -78,7 +78,7 @@ defmodule APISexBasicAuthTest do
     conn =
       conn(:get, "/")
       |> put_req_header("authorization", "Basic " <> Base.encode64(@valid_client_id <> ":" <> @valid_client_secret))
-      |> APISexBasicAuth.call(%APISexBasicAuthConfig{callback: fn _realm, _client_id -> @valid_client_secret end})
+      |> APISexAuthBasic.call(%APISexAuthBasicConfig{callback: fn _realm, _client_id -> @valid_client_secret end})
 
     refute conn.status == 401
     refute conn.halted == true
@@ -88,7 +88,7 @@ defmodule APISexBasicAuthTest do
     conn =
       conn(:get, "/")
       |> put_req_header("authorization", "Basic " <> Base.encode64(@valid_client_id <> ":" <> @valid_client_secret))
-      |> APISexBasicAuth.call(%APISexBasicAuthConfig{callback: fn _realm, _client_id -> "invalid client_secret" end})
+      |> APISexAuthBasic.call(%APISexAuthBasicConfig{callback: fn _realm, _client_id -> "invalid client_secret" end})
 
     assert conn.status == 401
     assert conn.halted == true
