@@ -75,8 +75,8 @@ defmodule APISexAuthBasic do
   end
 
   defp authenticate_success(conn, opts, client_id) do
-    result = %{
-      auth_scheme: :httpbasic,
+    result = %APISex.Authn{
+      auth_scheme: __MODULE__,
       realm: opts[:realm],
       client: client_id
     }
