@@ -111,4 +111,17 @@ defmodule APISexAuthBasicTest do
     assert conn.status == 401
     assert conn.halted
   end
+
+  test "Check mutliples realms in www-authenticate header" do
+    opts1 = APISexAuthBasic.init([realm: "realm1"])
+    opts2 = APISexAuthBasic.init([realm: "realm2"])
+
+    conn =
+      conn(:get, "/")
+      |> put_req_header("authorization", "Basic " <> Base.encode64(@valid_client_id <> ":" <> "invalid_secret"))
+      |> APISexAuthBasic.call(opts1)
+      |> APISexAuthBasic.call(opts2)
+
+    assert ["Basic realm=\"realm1\", Basic realm=\"realm2\""] == get_resp_header(conn, "www-authenticate")
+  end
 end
