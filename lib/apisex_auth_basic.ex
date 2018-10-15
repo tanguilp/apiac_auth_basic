@@ -1,125 +1,134 @@
 defmodule APISexAuthBasic do
   @behaviour Plug
+  @behaviour APISex.Authenticator
 
   use Bitwise
 
-  @default_realm_name "Default realm"
+  @default_realm_name "default_realm"
+
+  @typedoc """
+    The callback function returns an Expwd.Hashed.t or a client_secret (String.t) so as
+    to prevent developers to [unsecurely compare passwords](https://codahale.com/a-lesson-in-timing-attacks/).
+
+    Return `nil` if the client could not be gound for this realm
+  """
+  @type callback_fun :: (APISex.realm, APISex.client -> Expwd.Hashed.t | client_secret | nil)
+  @type client_secret :: String.t
 
   @spec init(Plug.opts) :: Plug.opts
   def init(opts) do
-    opts = %{
-      clients: Keyword.get(opts, :clients, []),
-      callback: Keyword.get(opts, :callback, nil),
-      advertise_wwwauthenticate_header: Keyword.get(opts, :advertise_wwwauthenticate_header, true),
-      realm: Keyword.get(opts, :realm, @default_realm_name),
-      halt_on_authentication_failure: Keyword.get(opts, :halt_on_authentication_failure, true)
-    }
+    realm = Keyword.get(opts, :realm, @default_realm_name)
 
-    # https://tools.ietf.org/html/rfc7235#section-2.2
-    #
-    #    For historical reasons, a sender MUST only generate the quoted-string
-    #    syntax.  Recipients might have to support both token and
-    #    quoted-string syntax for maximum interoperability with existing
-    #    clients that have been accepting both notations for a long time.
-    if Regex.match?(APISex.Utils.rfc7230_quotedstring_regex(), opts[:realm]) do
-      opts
-    else
-      raise "Invalid realm string (do not conform with RFC7230 quoted string)"
-    end
+    if not APISex.is_rfc7230_quotedstring?("\"#{realm}\""), do: raise "Invalid realm string (do not conform with RFC7230 quoted string)"
+
+    %{
+      realm: realm,
+      clients: Application.get_env(:apisex_auth_basic, :clients)[realm],
+      callback: Keyword.get(opts, :callback, nil),
+      set_authn_error_response: Keyword.get(opts, :advertise_wwwauthenticate_header, true),
+      halt_on_authn_failure: Keyword.get(opts, :halt_on_authentication_failure, true)
+    }
   end
 
   @spec call(Plug.Conn, Plug.opts) :: Plug.Conn
   def call(conn, %{} = opts) do
-    call_parse(conn, opts, Plug.Conn.get_req_header(conn, "authorization"))
-  end
+    with {:ok, conn, credentials} <- extract_credentials(conn, opts),
+         {:ok, conn} <- validate_credentials(conn, credentials, opts) do
+      conn
+    else
+      {:error, conn, %APISex.Authenticator.Unauthorized{} = error} ->
+        conn = if opts[:halt_on_authn_failure], do: Plug.Conn.halt(conn), else: conn
 
-  # Only one header value should be returned
-  # (https://stackoverflow.com/questions/29282578/multiple-http-authorization-headers)
-  defp call_parse(conn, opts, ["Basic " <> auth_token]) do
-    # rfc7235 syntax allows multiple spaces before the base64 token
-    case Base.decode64(String.trim_leading(auth_token, "\s")) do
-      {:ok, req_client_id_secret} -> parse_req_client_id_secret(conn, opts, req_client_id_secret)
-      :error -> authenticate_failure(conn, opts)
-    end
-  end
-  defp call_parse(conn, opts, _), do: authenticate_failure(conn, opts)
-
-  defp parse_req_client_id_secret(conn, opts, req_client_id_secret) do
-    case String.split(req_client_id_secret, ":") do
-      [req_client_id, req_client_secret] -> authenticate(conn, opts, req_client_id, req_client_secret)
-      _ -> authenticate_failure(conn, opts)
+        if opts[:set_error_response], do: set_error_response(conn, error, opts), else: conn
     end
   end
 
-  defp authenticate(conn, opts = %{callback: callback}, req_client_id, req_client_secret) when is_function(callback) do
-    case callback.(opts[:realm], req_client_id) do
-      nil -> authenticate_failure(conn, opts)
-      client_secret -> if Expwd.secure_compare(req_client_secret, client_secret) == :ok do
-        authenticate_success(conn, opts, req_client_id)
-      else
-        authenticate_failure(conn, opts)
-      end
-    end
+  def extract_credentials(conn, _opts) do
+    parse_authz_header(conn)
   end
 
-  defp authenticate(conn, opts, req_client_id, req_client_secret) do
-    case Enum.find(opts[:clients], fn({client_id, _}) -> client_id == req_client_id end) do
-      nil -> authenticate_failure(conn, opts)
-      {_client_id, client_secret} ->
-        if Expwd.secure_compare(req_client_secret, client_secret) == :ok do
-          authenticate_success(conn, opts, req_client_id)
-        else
-          authenticate_failure(conn, opts)
+  defp parse_authz_header(conn) do
+    case Plug.Conn.get_req_header(conn, "authorization") do
+      # Only one header value should be returned
+      # (https://stackoverflow.com/questions/29282578/multiple-http-authorization-headers)
+      ["Basic " <> auth_token] ->
+        # rfc7235 syntax allows multiple spaces before the base64 token
+        case Base.decode64(String.trim_leading(auth_token, "\s")) do
+          {:ok, decodedbinary} ->
+            # nothing indicates we should trim extra whitespaces (a passowrd could contain one for instance)
+            case String.split(decodedbinary, ":", trim: false) do
+              [client_id, client_secret] ->
+                if not ctl_char?(client_secret) and not ctl_char?(client_secret) do
+                  {:ok, conn, {client_id, client_secret}}
+                else
+                  {:error,
+                    conn,
+                    %APISex.Authenticator.Unauthorized{
+                      authenticator: __MODULE__,
+                      reason: :invalid_client_id_or_client_secret}}
+                end
+
+              _ ->
+                {:error, conn, %APISex.Authenticator.Unauthorized{
+                  authenticator: __MODULE__,
+                  reason: :invalid_credential_format}}
+            end
+
+          _ ->
+            {:error, conn, %APISex.Authenticator.Unauthorized{
+              authenticator: __MODULE__,
+              reason: :invalid_credential_format}}
         end
     end
   end
 
-  defp authenticate_success(conn, opts, client_id) do
-    result = %APISex.Authn{
-      auth_scheme: __MODULE__,
-      realm: opts[:realm],
-      client: client_id
-    }
-
-    Plug.Conn.put_private(conn, :apisex, result)
+  defp ctl_char?(str) do
+    Regex.run(~r/[\x00-\x1F\x7F]/, str) != nil
   end
 
-  defp authenticate_failure(conn,
-                            %{
-                              advertise_wwwauthenticate_header: true,
-                              halt_on_authentication_failure: true
-                            } = opts) do
-    conn
-    |> set_WWWAuthenticate_challenge(opts)
-    |> Plug.Conn.put_status(:unauthorized)
-    |> Plug.Conn.halt
-  end
+  def validate_credentials(conn, {client_id, client_secret}, %{callback: callback} = opts) when is_function(callback) do
+    case callback.(opts[:realm], client_id) do
+      nil ->
+        {:error, conn, %APISex.Authenticator.Unauthorized{authenticator: __MODULE__, reason: :client_not_found}}
 
-  defp authenticate_failure(conn,
-                            %{
-                              advertise_wwwauthenticate_header: false,
-                              halt_on_authentication_failure: true
-                            }) do
-    conn
-    |> Plug.Conn.put_status(:unauthorized)
-    |> Plug.Conn.halt
-  end
+      stored_client_secret ->
+        if Expwd.secure_compare(client_secret, stored_client_secret) == true do
+          conn =
+            conn
+            |> Plug.Conn.put_private(:apisex_authenticator, __MODULE__)
+            |> Plug.Conn.put_private(:apisex_client, client_id)
+            |> Plug.Conn.put_private(:apisex_realm, opts[:realm])
 
-  defp authenticate_failure(conn,
-                            %{
-                              advertise_wwwauthenticate_header: true,
-                              halt_on_authentication_failure: false
-                            } = opts) do
-    conn
-    |> set_WWWAuthenticate_challenge(opts)
-  end
-
-  defp authenticate_failure(conn, _opts), do: conn
-
-  defp set_WWWAuthenticate_challenge(conn, opts) do
-    case Plug.Conn.get_resp_header(conn, "www-authenticate") do
-      [] -> Plug.Conn.put_resp_header(conn, "www-authenticate", "Basic realm=\"#{opts[:realm]}\"")
-      [header_val|_] -> Plug.Conn.put_resp_header(conn, "www-authenticate", header_val <> ", Basic realm=\"#{opts[:realm]}\"")
+          {:ok, conn}
+        else
+          {:error, conn, %APISex.Authenticator.Unauthorized{authenticator: __MODULE__, reason: :invalid_client_secret}}
+        end
     end
+  end
+
+  def validate_credentials(conn, {client_id, client_secret}, opts) do
+    case List.keyfind(opts[:clients], client_id, 0) do
+      nil ->
+        {:error, conn, %APISex.Authenticator.Unauthorized{authenticator: __MODULE__, reason: :client_not_found}}
+
+      {_stored_client_id, stored_client_secret} ->
+        if Expwd.secure_compare(client_secret, stored_client_secret) == true do
+          conn =
+            conn
+            |> Plug.Conn.put_private(:apisex_authenticator, __MODULE__)
+            |> Plug.Conn.put_private(:apisex_client, client_id)
+            |> Plug.Conn.put_private(:apisex_realm, opts[:realm])
+
+          {:ok, conn}
+        else
+          {:error, conn, %APISex.Authenticator.Unauthorized{authenticator: __MODULE__, reason: :invalid_client_secret}}
+        end
+    end
+  end
+
+  def set_error_response(conn, _error, opts) do
+    conn
+    |> Plug.Conn.put_status(:unauthorized)
+    |> APISex.set_WWauthenticate_challenge("Basic", %{"realm" => "\"#{opts[:realm]}\""})
   end
 end
