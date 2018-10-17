@@ -19,14 +19,14 @@ defmodule APISexAuthBasic do
   def init(opts) do
     realm = Keyword.get(opts, :realm, @default_realm_name)
 
-    if not APISex.is_rfc7230_quotedstring?("\"#{realm}\""), do: raise "Invalid realm string (do not conform with RFC7230 quoted string)"
+    if not APISex.rfc7230_quotedstring?("\"#{realm}\""), do: raise "Invalid realm string (do not conform with RFC7230 quoted string)"
 
     %{
       realm: realm,
-      clients: Application.get_env(:apisex_auth_basic, :clients)[realm],
+      clients: Application.get_env(:apisex_auth_basic, :clients)[realm] || [],
       callback: Keyword.get(opts, :callback, nil),
-      set_authn_error_response: Keyword.get(opts, :advertise_wwwauthenticate_header, true),
-      halt_on_authn_failure: Keyword.get(opts, :halt_on_authentication_failure, true)
+      set_authn_error_response: Keyword.get(opts, :set_authn_error_response, true),
+      halt_on_authn_failure: Keyword.get(opts, :halt_on_authn_failure, true)
     }
   end
 
@@ -39,7 +39,7 @@ defmodule APISexAuthBasic do
       {:error, conn, %APISex.Authenticator.Unauthorized{} = error} ->
         conn = if opts[:halt_on_authn_failure], do: Plug.Conn.halt(conn), else: conn
 
-        if opts[:set_error_response], do: set_error_response(conn, error, opts), else: conn
+        if opts[:set_authn_error_response], do: set_error_response(conn, error, opts), else: conn
     end
   end
 
@@ -79,6 +79,10 @@ defmodule APISexAuthBasic do
               authenticator: __MODULE__,
               reason: :invalid_credential_format}}
         end
+      _ ->
+        {:error, conn, %APISex.Authenticator.Unauthorized{
+          authenticator: __MODULE__,
+          reason: :unrecognized_scheme}}
     end
   end
 
@@ -129,6 +133,6 @@ defmodule APISexAuthBasic do
   def set_error_response(conn, _error, opts) do
     conn
     |> Plug.Conn.put_status(:unauthorized)
-    |> APISex.set_WWauthenticate_challenge("Basic", %{"realm" => "\"#{opts[:realm]}\""})
+    |> APISex.set_WWWauthenticate_challenge("Basic", %{"realm" => "#{opts[:realm]}"})
   end
 end

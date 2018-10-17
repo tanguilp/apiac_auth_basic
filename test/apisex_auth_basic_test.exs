@@ -1,14 +1,19 @@
 defmodule APISexAuthBasicTest do
   use ExUnit.Case, async: true
   use Plug.Test
-  doctest APISexAuthBasic
 
   @valid_client_id "my_client"
   @valid_client_secret "My secret"
   @test_realm_name "It's closed"
 
-  test "Correct credentials" do
-    opts = APISexAuthBasic.init([clients: [{@valid_client_id, @valid_client_secret}]])
+  setup_all do
+    Application.put_env(:apisex_auth_basic,
+                        :clients,
+                        %{@test_realm_name => [{@valid_client_id, @valid_client_secret}]})
+  end
+
+  test "Correct credentials - check APISex attributes are correctly set" do
+    opts = APISexAuthBasic.init([realm: @test_realm_name])
 
     conn =
       conn(:get, "/")
@@ -17,10 +22,14 @@ defmodule APISexAuthBasicTest do
 
     refute conn.status == 401
     refute conn.halted
+    assert APISex.authenticated?(conn) == true
+    assert APISex.machine_to_machine?(conn) == true
+    assert APISex.authenticator(conn) == APISexAuthBasic
+    assert APISex.client(conn) == @valid_client_id
   end
 
   test "Correct credentials with additional white spaces" do
-    opts = APISexAuthBasic.init([clients: [{@valid_client_id, @valid_client_secret}]])
+    opts = APISexAuthBasic.init([realm: @test_realm_name])
 
     conn =
       conn(:get, "/")
@@ -55,7 +64,7 @@ defmodule APISexAuthBasicTest do
   end
 
   test "Check www-authenticate not set" do
-    opts = APISexAuthBasic.init([advertise_wwwauthenticate_header: false])
+    opts = APISexAuthBasic.init([set_error_response: false])
 
     conn =
       conn(:get, "/")
@@ -66,7 +75,7 @@ defmodule APISexAuthBasicTest do
   end
 
   test "Check plug not halted" do
-    opts = APISexAuthBasic.init([halt_on_authentication_failure: false])
+    opts = APISexAuthBasic.init([halt_on_authn_failure: false])
 
     conn =
       conn(:get, "/")
