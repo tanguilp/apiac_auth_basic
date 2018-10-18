@@ -7,7 +7,11 @@ defmodule APISexAuthBasic.Mixfile do
       version: "0.1.0",
       elixir: "~> 1.5",
       start_permanent: Mix.env == :prod,
-      deps: deps()
+      deps: deps(),
+      docs: [
+        main: "readme",
+        extras: ["README.md"]
+      ]
     ]
   end
 
@@ -19,10 +23,11 @@ defmodule APISexAuthBasic.Mixfile do
 
   defp deps do
     [
-      {:cowboy, "~> 1.0.0"},
+      {:cowboy, "~> 2.0"},
       {:plug, "~> 1.0"},
       {:expwd, git: "https://github.com/sergeypopol/expwd.git", tag: "master"},
-      {:apisex, git: "https://github.com/sergeypopol/apisex.git", tag: "master"}
+      {:apisex, git: "https://github.com/sergeypopol/apisex.git", tag: "master"},
+      {:ex_doc, "~> 0.19", only: :dev, runtime: false}
     ]
   end
 end
