@@ -4,6 +4,24 @@ defmodule APISexAuthBasic do
 
   use Bitwise
 
+  @moduledoc """
+  An `APISex.Authenticator` plug for API authentication using the HTTP `Basic` scheme
+
+  The HTTP `Basic` scheme simply consists in transmitting a client and its password
+  in the `Authorization` HTTP header. It is base64-encoded:
+  ```http
+  GET /api/accounts HTTP/1.1
+  Host: example.com
+  Authorization: Basic Y2xpZW50X2lkOmNsaWVudF9wYXNzd29yZA==
+  Accept: */*
+  ```
+  The decoded value of `Y2xpZW50X2lkOmNsaWVudF9wYXNzd29yZA==` is `client_id:client_password`
+
+  **Security note**: the password is transmitted in cleartext form (base64 is not a encryption scheme). Therefore, you should only use this scheme on encrypted connections (HTTPS).
+
+  This scheme is also sometimes called *APIKey* by some API managers.
+  """
+
   @default_realm_name "default_realm"
 
   @typedoc """
@@ -15,9 +33,25 @@ defmodule APISexAuthBasic do
   @type callback_fun :: (APISex.realm, APISex.client -> Expwd.Hashed.t | client_secret | nil)
   @type client_secret :: String.t
 
+  @doc """
+  Initializes options
+
+  The available options are:
+  - `realm`: a mandatory `String.t` that conforms to the HTTP quoted-string syntax, however without the surrounding quotes (which will be added automatically when needed). Defaults to `default_realm`
+  - `callback`: a function that will return the password of a client. When a callback is configured, it takes precedence over the clients in the config files, which will not be used. The returned value can be:
+    - A cleartext password (`String.t`)
+    - An `Expwd.Hashed{}` (hashed password)
+    - `nil` if the client is not known
+    - `set_authn_error_response`: if `true`, sets the error response accordingly to the standard: changing the HTTP status code to `401` and setting the `WWW-Authenticate` value. If false, does not change them. Defaults to `true`
+    - `halt_on_authn_failure`: if set to `true`, halts the connection, so that no other plugs will be executed. When set to `false`, does nothing and therefore allows chaining several authenticators. Defaults to `true`
+  """
+
+  @impl true
   @spec init(Plug.opts) :: Plug.opts
   def init(opts) do
     realm = Keyword.get(opts, :realm, @default_realm_name)
+
+    if not is_binary(realm), do: raise "Invalid realm, must be a string"
 
     if not APISex.rfc7230_quotedstring?("\"#{realm}\""), do: raise "Invalid realm string (do not conform with RFC7230 quoted string)"
 
@@ -30,6 +64,7 @@ defmodule APISexAuthBasic do
     }
   end
 
+  @impl true
   @spec call(Plug.Conn, Plug.opts) :: Plug.Conn
   def call(conn, %{} = opts) do
     with {:ok, conn, credentials} <- extract_credentials(conn, opts),
@@ -43,6 +78,7 @@ defmodule APISexAuthBasic do
     end
   end
 
+  @impl true
   def extract_credentials(conn, _opts) do
     parse_authz_header(conn)
   end
@@ -90,6 +126,7 @@ defmodule APISexAuthBasic do
     Regex.run(~r/[\x00-\x1F\x7F]/, str) != nil
   end
 
+  @impl true
   def validate_credentials(conn, {client_id, client_secret}, %{callback: callback} = opts) when is_function(callback) do
     case callback.(opts[:realm], client_id) do
       nil ->
@@ -110,6 +147,7 @@ defmodule APISexAuthBasic do
     end
   end
 
+  @impl true
   def validate_credentials(conn, {client_id, client_secret}, opts) do
     case List.keyfind(opts[:clients], client_id, 0) do
       nil ->
@@ -130,6 +168,7 @@ defmodule APISexAuthBasic do
     end
   end
 
+  @impl true
   def set_error_response(conn, _error, opts) do
     conn
     |> Plug.Conn.put_status(:unauthorized)
