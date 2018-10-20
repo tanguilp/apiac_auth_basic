@@ -1,21 +1,33 @@
 # APISexBasicAuth
 
-**TODO: Add description**
+An `APISex.Authenticator` plug for API authentication using the HTTP `Basic` scheme
 
-## Installation
+The HTTP `Basic` scheme simply consists in transmitting a client and its password
+in the `Authorization` HTTP header. It is base64-encoded:
+```http
+GET /api/accounts HTTP/1.1
+Host: example.com
+Authorization: Basic Y2xpZW50X2lkOmNsaWVudF9wYXNzd29yZA==
+Accept: */*
+```
+The decoded value of `Y2xpZW50X2lkOmNsaWVudF9wYXNzd29yZA==` is `client_id:client_password`
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `apisex_basicauth` to your list of dependencies in `mix.exs`:
+This scheme is also sometimes called *APIKey* by some API managers.
+
+## Example (with callback function)
+
+The callback function will be called with the `realm` and `client` and return string password or an `%Expwd.Hashed{}` struct:
 
 ```elixir
-def deps do
-  [
-    {:apisex_basicauth, "~> 0.1.0"}
-  ]
-end
+Plug APISexAuthBasic, realm: "my realm",
+		      callback: &Module.get_client_password/2
 ```
 
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at [https://hexdocs.pm/apisex_basicauth](https://hexdocs.pm/apisex_basicauth).
+This plug follows the APISex standard. To get the client:
+```elixir
 
+```
+
+## Documentation
+
+Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)

@@ -17,9 +17,52 @@ defmodule APISexAuthBasic do
   ```
   The decoded value of `Y2xpZW50X2lkOmNsaWVudF9wYXNzd29yZA==` is `client_id:client_password`
 
-  **Security note**: the password is transmitted in cleartext form (base64 is not a encryption scheme). Therefore, you should only use this scheme on encrypted connections (HTTPS).
-
   This scheme is also sometimes called *APIKey* by some API managers.
+
+  ## Security considerations
+
+  The password is transmitted in cleartext form (base64 is not a encryption scheme). Therefore, you should only use this scheme on encrypted connections (HTTPS).
+
+  ## Plug options
+
+  - `realm`: a mandatory `String.t` that conforms to the HTTP quoted-string syntax, however without the surrounding quotes (which will be added automatically when needed). Defaults to `default_realm`
+  - `callback`: a function that will return the password of a client. When a callback is configured, it takes precedence over the clients in the config files, which will not be used. The returned value can be:
+    - A cleartext password (`String.t`)
+    - An `Expwd.Hashed{}` (hashed password)
+    - `nil` if the client is not known
+    - `set_authn_error_response`: if `true`, sets the error response accordingly to the standard: changing the HTTP status code to `401` and setting the `WWW-Authenticate` value. If false, does not change them. Defaults to `true`
+    - `halt_on_authn_failure`: if set to `true`, halts the connection and directly sends the response. When set to `false`, does nothing and therefore allows chaining several authenticators. Defaults to `true`
+
+  ## Application configuration
+
+  `{client_id, client_secret}` pairs can be configured in you application configuration files. There will be compiled at **compile time**. If you need runtime configurability,
+  use the `callback` option instead.
+
+  Storing cleartext password requires special care, for instance: using *.secret.exs files, encrypted storage of these config files, etc. Consider using hashed password instead, such
+  as `%Expwd.Hashed{}`.
+
+  Pairs a to be set separately for each realm in the `clients` key, as following:
+  ``` elixir
+  config :apisex_auth_basic,
+    clients: %{
+      # using Expwd Hashed portable password
+      "realm_a" => [
+        {"client_1", {:expwd, :sha256, "lYOmCIZUR603rPiIN0agzBHFyZDw9xEtETfbe6Q1ubU"}},
+        {"client_2", {:expwd, :sha256, "mnAWHn1tSHEOCj6sMDIrB9BTRuD4yZkiLbjx9x2i3ug"}},
+        {"client_3", {:expwd, :sha256, "9RYrMJSmXJSN4CSJZtOX0Xs+vP94meTaSzGc+oFcwqM"}},
+        {"client_4", {:expwd, :sha256, "aCL154jd8bNw868cbsCUw3skHun1n6fGYhBiITSmREw"}},
+        {"client_5", {:expwd, :sha256, "xSE6MkeC+gW7R/lEZKxsWGDs1MlqEV4u693fCBNlV4g"}}
+      ],
+      "realm_b" => [
+        {"client_1", {:expwd, :sha256, "lYOmCIZUR603rPiIN0agzBHFyZDw9xEtETfbe6Q1ubU"}}
+      ],
+      # UNSAFE: cleartext passwords set directly in the config file
+      "realm_c" => [
+        {"client_6", "cleartext password"},
+        {"client_7", "cleartext password again"}
+      ]
+    }
+  ```
   """
 
   @default_realm_name "default_realm"
@@ -34,16 +77,7 @@ defmodule APISexAuthBasic do
   @type client_secret :: String.t
 
   @doc """
-  Initializes options
-
-  The available options are:
-  - `realm`: a mandatory `String.t` that conforms to the HTTP quoted-string syntax, however without the surrounding quotes (which will be added automatically when needed). Defaults to `default_realm`
-  - `callback`: a function that will return the password of a client. When a callback is configured, it takes precedence over the clients in the config files, which will not be used. The returned value can be:
-    - A cleartext password (`String.t`)
-    - An `Expwd.Hashed{}` (hashed password)
-    - `nil` if the client is not known
-    - `set_authn_error_response`: if `true`, sets the error response accordingly to the standard: changing the HTTP status code to `401` and setting the `WWW-Authenticate` value. If false, does not change them. Defaults to `true`
-    - `halt_on_authn_failure`: if set to `true`, halts the connection, so that no other plugs will be executed. When set to `false`, does nothing and therefore allows chaining several authenticators. Defaults to `true`
+  Plug initialization callback
   """
 
   @impl true
@@ -64,6 +98,10 @@ defmodule APISexAuthBasic do
     }
   end
 
+  @doc """
+  Plug pipeline callback
+  """
+
   @impl true
   @spec call(Plug.Conn, Plug.opts) :: Plug.Conn
   def call(conn, %{} = opts) do
@@ -72,11 +110,24 @@ defmodule APISexAuthBasic do
       conn
     else
       {:error, conn, %APISex.Authenticator.Unauthorized{} = error} ->
-        conn = if opts[:halt_on_authn_failure], do: Plug.Conn.halt(conn), else: conn
+        conn =
+          if opts[:set_authn_error_response] do
+            set_error_response(conn, error, opts)
+          else
+            conn
+          end
 
-        if opts[:set_authn_error_response], do: set_error_response(conn, error, opts), else: conn
+        if opts[:halt_on_authn_failure] do
+          Plug.Conn.halt(conn)
+        else
+          conn
+        end
     end
   end
+
+  @doc """
+  `APISex.Authenticator` credential extractor callback
+  """
 
   @impl true
   def extract_credentials(conn, _opts) do
@@ -126,6 +177,10 @@ defmodule APISexAuthBasic do
     Regex.run(~r/[\x00-\x1F\x7F]/, str) != nil
   end
 
+  @doc """
+  `APISex.Authenticator` credential validator callback
+  """
+
   @impl true
   def validate_credentials(conn, {client_id, client_secret}, %{callback: callback} = opts) when is_function(callback) do
     case callback.(opts[:realm], client_id) do
@@ -154,7 +209,15 @@ defmodule APISexAuthBasic do
         {:error, conn, %APISex.Authenticator.Unauthorized{authenticator: __MODULE__, reason: :client_not_found}}
 
       {_stored_client_id, stored_client_secret} ->
-        if Expwd.secure_compare(client_secret, stored_client_secret) == true do
+        cs = case stored_client_secret do
+          {:expwd, alg, b64_secret} when is_atom(alg) and is_binary(b64_secret) ->
+            Expwd.Hashed.Portable.from_portable(stored_client_secret)
+
+          str when is_binary(str) ->
+            str
+        end
+
+        if Expwd.secure_compare(client_secret, cs) == true do
           conn =
             conn
             |> Plug.Conn.put_private(:apisex_authenticator, __MODULE__)
@@ -168,6 +231,9 @@ defmodule APISexAuthBasic do
     end
   end
 
+  @doc """
+  `APISex.Authenticator` error response callback
+  """
   @impl true
   def set_error_response(conn, _error, opts) do
     conn

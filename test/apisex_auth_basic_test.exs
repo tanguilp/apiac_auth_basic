@@ -9,7 +9,11 @@ defmodule APISexAuthBasicTest do
   setup_all do
     Application.put_env(:apisex_auth_basic,
                         :clients,
-                        %{@test_realm_name => [{@valid_client_id, @valid_client_secret}]})
+                        %{@test_realm_name =>
+                          [
+                            {@valid_client_id, @valid_client_secret},
+                            {"expwd_client", {:expwd, :sha256, "xSE6MkeC+gW7R/lEZKxsWGDs1MlqEV4u693fCBNlV4g"}} # password is "Yg03EosS+2I7XxozZyMfshph1r4khGgLrj92nyEvmak"
+                          ]})
   end
 
   test "Correct credentials - check APISex attributes are correctly set" do
@@ -34,6 +38,18 @@ defmodule APISexAuthBasicTest do
     conn =
       conn(:get, "/")
       |> put_req_header("authorization", "Basic      " <> Base.encode64(@valid_client_id <> ":" <> @valid_client_secret))
+      |> APISexAuthBasic.call(opts)
+
+    refute conn.status == 401
+    refute conn.halted
+  end
+
+  test "Correct credentials with Expwd portable format" do
+    opts = APISexAuthBasic.init([realm: @test_realm_name])
+
+    conn =
+      conn(:get, "/")
+      |> put_req_header("authorization", "Basic " <> Base.encode64("expwd_client:Yg03EosS+2I7XxozZyMfshph1r4khGgLrj92nyEvmak"))
       |> APISexAuthBasic.call(opts)
 
     refute conn.status == 401
