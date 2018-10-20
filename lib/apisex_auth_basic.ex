@@ -118,7 +118,9 @@ defmodule APISexAuthBasic do
           end
 
         if opts[:halt_on_authn_failure] do
-          Plug.Conn.halt(conn)
+          conn
+          |> Plug.Conn.send_resp()
+          |> Plug.Conn.halt()
         else
           conn
         end
@@ -237,7 +239,7 @@ defmodule APISexAuthBasic do
   @impl true
   def set_error_response(conn, _error, opts) do
     conn
-    |> Plug.Conn.put_status(:unauthorized)
     |> APISex.set_WWWauthenticate_challenge("Basic", %{"realm" => "#{opts[:realm]}"})
+    |> Plug.Conn.resp(:unauthorized, "")
   end
 end

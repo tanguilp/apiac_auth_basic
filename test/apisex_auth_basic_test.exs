@@ -138,7 +138,7 @@ defmodule APISexAuthBasicTest do
   end
 
   test "Check mutliples realms in www-authenticate header" do
-    opts1 = APISexAuthBasic.init([realm: "realm1"])
+    opts1 = APISexAuthBasic.init([realm: "realm1", halt_on_authn_failure: false])
     opts2 = APISexAuthBasic.init([realm: "realm2"])
 
     conn =
