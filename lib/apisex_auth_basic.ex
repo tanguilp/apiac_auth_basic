@@ -30,8 +30,8 @@ defmodule APISexAuthBasic do
     - A cleartext password (`String.t`)
     - An `Expwd.Hashed{}` (hashed password)
     - `nil` if the client is not known
-    - `set_authn_error_response`: if `true`, sets the error response accordingly to the standard: changing the HTTP status code to `401` and setting the `WWW-Authenticate` value. If false, does not change them. Defaults to `true`
-    - `halt_on_authn_failure`: if set to `true`, halts the connection and directly sends the response. When set to `false`, does nothing and therefore allows chaining several authenticators. Defaults to `true`
+  - `set_authn_error_response`: if `true`, sets the error response accordingly to the standard: changing the HTTP status code to `401` and setting the `WWW-Authenticate` value. If false, does not change them. Defaults to `true`
+  - `halt_on_authn_failure`: if set to `true`, halts the connection and directly sends the response. When set to `false`, does nothing and therefore allows chaining several authenticators. Defaults to `true`
 
   ## Application configuration
 
