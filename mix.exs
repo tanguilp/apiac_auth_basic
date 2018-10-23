@@ -25,8 +25,8 @@ defmodule APISexAuthBasic.Mixfile do
     [
       {:cowboy, "~> 2.0"},
       {:plug, "~> 1.0"},
-      {:expwd, git: "https://github.com/sergeypopol/expwd.git", tag: "master"},
-      {:apisex, git: "https://github.com/sergeypopol/apisex.git", tag: "master"},
+      {:expwd, github: "tanguilp/expwd", tag: "master"},
+      {:apisex, github: "tanguilp/apisex", tag: "master"},
       {:ex_doc, "~> 0.19", only: :dev, runtime: false}
     ]
   end
