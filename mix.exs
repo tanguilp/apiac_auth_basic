@@ -17,13 +17,12 @@ defmodule APISexAuthBasic.Mixfile do
 
   def application do
     [
-      extra_applications: [:cowboy, :plug]
+      extra_applications: [:logger]
     ]
   end
 
   defp deps do
     [
-      {:cowboy, "~> 2.0"},
       {:plug, "~> 1.0"},
       {:expwd, github: "tanguilp/expwd", tag: "master"},
       {:apisex, github: "tanguilp/apisex", tag: "master"},
