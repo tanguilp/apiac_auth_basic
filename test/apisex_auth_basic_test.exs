@@ -79,26 +79,17 @@ defmodule APISexAuthBasicTest do
     assert ["Basic realm=\"#{@test_realm_name}\""] == get_resp_header(conn, "www-authenticate")
   end
 
-  test "Check www-authenticate not set" do
-    opts = APISexAuthBasic.init([set_error_response: false])
+  test "Check APISexAuthBasic.set_WWWauthenticate_header/3 function" do
+    opts = APISexAuthBasic.init([realm: @test_realm_name,
+                                 set_error_response: &APISexAuthBasic.set_WWWauthenticate_header/3])
 
     conn =
       conn(:get, "/")
-      |> put_req_header("authorization", "Basic " <> Base.encode64(@valid_client_id <> ":" <> "invalid_secret"))
       |> APISexAuthBasic.call(opts)
 
-    refute ["Basic realm=\"#{@test_realm_name}\""] == get_resp_header(conn, "www-authenticate")
-  end
-
-  test "Check plug not halted" do
-    opts = APISexAuthBasic.init([halt_on_authn_failure: false])
-
-    conn =
-      conn(:get, "/")
-      |> put_req_header("authorization", "Basic " <> Base.encode64(@valid_client_id <> ":" <> "invalid_secret"))
-      |> APISexAuthBasic.call(opts)
-
+    assert ["Basic realm=\"#{@test_realm_name}\""] == get_resp_header(conn, "www-authenticate")
     refute conn.halted
+    refute conn.status == 401
   end
 
   test "Check incorrect authentication scheme" do
@@ -138,12 +129,12 @@ defmodule APISexAuthBasicTest do
   end
 
   test "Check mutliples realms in www-authenticate header" do
-    opts1 = APISexAuthBasic.init([realm: "realm1", halt_on_authn_failure: false])
+    opts1 = APISexAuthBasic.init([realm: "realm1",
+                                  set_error_response: &APISexAuthBasic.set_WWWauthenticate_header/3])
     opts2 = APISexAuthBasic.init([realm: "realm2"])
 
     conn =
       conn(:get, "/")
-      |> put_req_header("authorization", "Basic " <> Base.encode64(@valid_client_id <> ":" <> "invalid_secret"))
       |> APISexAuthBasic.call(opts1)
       |> APISexAuthBasic.call(opts2)
 

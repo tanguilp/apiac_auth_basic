@@ -21,17 +21,24 @@ defmodule APISexAuthBasic do
 
   ## Security considerations
 
-  The password is transmitted in cleartext form (base64 is not a encryption scheme). Therefore, you should only use this scheme on encrypted connections (HTTPS).
+  The password is transmitted in cleartext form (base64 is not a encryption scheme).
+  Therefore, you should only use this scheme on encrypted connections (HTTPS).
 
   ## Plug options
 
-  - `realm`: a mandatory `String.t` that conforms to the HTTP quoted-string syntax, however without the surrounding quotes (which will be added automatically when needed). Defaults to `default_realm`
-  - `callback`: a function that will return the password of a client. When a callback is configured, it takes precedence over the clients in the config files, which will not be used. The returned value can be:
+  - `realm`: a mandatory `String.t` that conforms to the HTTP quoted-string syntax,
+  however without the surrounding quotes (which will be added automatically when
+  needed). Defaults to `default_realm`
+  - `callback`: a function that will return the password of a client. When a
+  callback is configured, it takes precedence over the clients in the config
+  files, which will not be used. The returned value can be:
     - A cleartext password (`String.t`)
     - An `Expwd.Hashed{}` (hashed password)
     - `nil` if the client is not known
-  - `set_authn_error_response`: if `true`, sets the error response accordingly to the standard: changing the HTTP status code to `401` and setting the `WWW-Authenticate` value. If false, does not change them. Defaults to `true`
-  - `halt_on_authn_failure`: if set to `true`, halts the connection and directly sends the response. When set to `false`, does nothing and therefore allows chaining several authenticators. Defaults to `true`
+  - `set_error_response`: function called when authentication failed. Defaults to
+  `APISexAuthBasic.send_error_response/3`
+  - `error_response_verbosity`: one of `:debug`, `:normal` or `:minimal`.
+  Defaults to `:normal`
 
   ## Application configuration
 
@@ -65,7 +72,7 @@ defmodule APISexAuthBasic do
   ```
   """
 
-  @default_realm_name "default_realm"
+  @default_realm "default_realm"
 
   @typedoc """
     The callback function returns an Expwd.Hashed.t or a client_secret (String.t) so as
@@ -80,29 +87,28 @@ defmodule APISexAuthBasic do
   Plug initialization callback
   """
 
-  @impl true
+  @impl Plug
   @spec init(Plug.opts) :: Plug.opts
   def init(opts) do
-    realm = Keyword.get(opts, :realm, @default_realm_name)
+    if is_binary(opts[:realm]) and not APISex.rfc7230_quotedstring?("\"#{opts[:realm]}\""),
+      do: raise "Invalid realm string (do not conform with RFC7230 quoted string)"
 
-    if not is_binary(realm), do: raise "Invalid realm, must be a string"
+    realm = if opts[:realm], do: opts[:realm], else: @default_realm
 
-    if not APISex.rfc7230_quotedstring?("\"#{realm}\""), do: raise "Invalid realm string (do not conform with RFC7230 quoted string)"
-
-    %{
-      realm: realm,
-      clients: Application.get_env(:apisex_auth_basic, :clients)[realm] || [],
-      callback: Keyword.get(opts, :callback, nil),
-      set_authn_error_response: Keyword.get(opts, :set_authn_error_response, true),
-      halt_on_authn_failure: Keyword.get(opts, :halt_on_authn_failure, true)
-    }
+    opts
+    |> Enum.into(%{})
+    |> Map.put_new(:realm, @default_realm)
+    |> Map.put_new(:clients, Application.get_env(:apisex_auth_basic, :clients)[realm] || [])
+    |> Map.put_new(:callback, nil)
+    |> Map.put_new(:set_error_response, &APISexAuthBasic.send_error_response/3)
+    |> Map.put_new(:error_response_verbosity, :normal)
   end
 
   @doc """
   Plug pipeline callback
   """
 
-  @impl true
+  @impl Plug
   @spec call(Plug.Conn, Plug.opts) :: Plug.Conn
   def call(conn, %{} = opts) do
     with {:ok, conn, credentials} <- extract_credentials(conn, opts),
@@ -110,28 +116,18 @@ defmodule APISexAuthBasic do
       conn
     else
       {:error, conn, %APISex.Authenticator.Unauthorized{} = error} ->
-        conn =
-          if opts[:set_authn_error_response] do
-            set_error_response(conn, error, opts)
-          else
-            conn
-          end
-
-        if opts[:halt_on_authn_failure] do
-          conn
-          |> Plug.Conn.send_resp()
-          |> Plug.Conn.halt()
-        else
-          conn
-        end
+        opts[:set_error_response].(conn, error, opts)
     end
   end
 
   @doc """
   `APISex.Authenticator` credential extractor callback
+
+  Returns the credentials under the form `{client_id, client_secret}` where both
+  variables are binaries
   """
 
-  @impl true
+  @impl APISex.Authenticator
   def extract_credentials(conn, _opts) do
     parse_authz_header(conn)
   end
@@ -171,7 +167,7 @@ defmodule APISexAuthBasic do
       _ ->
         {:error, conn, %APISex.Authenticator.Unauthorized{
           authenticator: __MODULE__,
-          reason: :unrecognized_scheme}}
+          reason: :credentials_not_found}}
     end
   end
 
@@ -183,11 +179,14 @@ defmodule APISexAuthBasic do
   `APISex.Authenticator` credential validator callback
   """
 
-  @impl true
-  def validate_credentials(conn, {client_id, client_secret}, %{callback: callback} = opts) when is_function(callback) do
+  @impl APISex.Authenticator
+  def validate_credentials(conn, {client_id, client_secret}, %{callback: callback} = opts)
+  when is_function(callback) do
     case callback.(opts[:realm], client_id) do
       nil ->
-        {:error, conn, %APISex.Authenticator.Unauthorized{authenticator: __MODULE__, reason: :client_not_found}}
+        {:error, conn,
+          %APISex.Authenticator.Unauthorized{authenticator: __MODULE__,
+            reason: :client_not_found}}
 
       stored_client_secret ->
         if Expwd.secure_compare(client_secret, stored_client_secret) == true do
@@ -199,16 +198,20 @@ defmodule APISexAuthBasic do
 
           {:ok, conn}
         else
-          {:error, conn, %APISex.Authenticator.Unauthorized{authenticator: __MODULE__, reason: :invalid_client_secret}}
+          {:error, conn,
+            %APISex.Authenticator.Unauthorized{authenticator: __MODULE__,
+              reason: :invalid_client_secret}}
         end
     end
   end
 
-  @impl true
+  @impl APISex.Authenticator
   def validate_credentials(conn, {client_id, client_secret}, opts) do
     case List.keyfind(opts[:clients], client_id, 0) do
       nil ->
-        {:error, conn, %APISex.Authenticator.Unauthorized{authenticator: __MODULE__, reason: :client_not_found}}
+        {:error, conn,
+          %APISex.Authenticator.Unauthorized{authenticator: __MODULE__,
+            reason: :client_not_found}}
 
       {_stored_client_id, stored_client_secret} ->
         cs = case stored_client_secret do
@@ -228,18 +231,83 @@ defmodule APISexAuthBasic do
 
           {:ok, conn}
         else
-          {:error, conn, %APISex.Authenticator.Unauthorized{authenticator: __MODULE__, reason: :invalid_client_secret}}
+          {:error, conn,
+            %APISex.Authenticator.Unauthorized{authenticator: __MODULE__,
+              reason: :invalid_client_secret}}
         end
     end
   end
 
   @doc """
-  `APISex.Authenticator` error response callback
+  Implementation of the `APISex.Authenticator` callback
+
+  ## Verbosity
+
+  The following elements in the HTTP response are set depending on the value
+  of the `:error_response_verbosity` option:
+
+  | Error response verbosity  | HTTP Status        | Headers                                                | Body                                                    |
+  |:-------------------------:|--------------------|--------------------------------------------------------|---------------------------------------------------------|
+  | `:debug`                  | Unauthorized (401) | WWW-Authenticate with `Basic` scheme and `realm` param | `APISex.Authenticator.Unauthorized` exception's message |
+  | `:normal`                 | Unauthorized (401) | WWW-Authenticate with `Basic` scheme and `realm` param |                                                         |
+  | `:minimal`                | Unauthorized (401) |                                                        |                                                         |
+
+  Note: the behaviour when the verbosity is `:minimal` may not be conformant
+  to the HTTP specification as at least one scheme should be returned in
+  the `WWW-Authenticate` header.
+
   """
-  @impl true
-  def set_error_response(conn, _error, opts) do
+  @impl APISex.Authenticator
+  def send_error_response(conn, error, opts) do
+    case opts[:error_response_verbosity] do
+      :debug ->
+        conn
+        |> APISex.set_WWWauthenticate_challenge("Basic", %{"realm" => "#{opts[:realm]}"})
+        |> Plug.Conn.send_resp(:unauthorized, Exception.message(error))
+        |> Plug.Conn.halt()
+
+      :normal ->
+        conn
+        |> APISex.set_WWWauthenticate_challenge("Basic", %{"realm" => "#{opts[:realm]}"})
+        |> Plug.Conn.send_resp(:unauthorized, "")
+        |> Plug.Conn.halt()
+
+      :minimal ->
+        conn
+        |> Plug.Conn.send_resp(:unauthorized, "")
+        |> Plug.Conn.halt()
+    end
+  end
+
+  @doc """
+  Sets the HTTP `WWW-authenticate` header when no such a scheme is used for
+  authentication.
+
+  Sets the HTTP `WWW-Authenticate` header with the `Basic` scheme and the realm
+  name, when the `Basic` scheme was not used in the request. When this scheme is
+  used in the request, response will be sent by `#{__MODULE__}.send_error_response/3`.
+  This allows advertising that the `Basic` scheme is available, without stopping
+  the plug pipeline.
+
+  Raises a exception when the error response verbosity is set to `:minimal` since
+  it does not set the `WWW-Authenticate` header.
+  """
+  @spec set_WWWauthenticate_header(Plug.Conn.t(),
+                                   %APISex.Authenticator.Unauthorized{},
+                                   any()) :: Plug.Conn.t()
+  def set_WWWauthenticate_header(_conn, _err, %{:error_response_verbosity => :minimal }) do
+    raise "#{__ENV__.function} not accepted when :error_response_verbosity is set to :minimal"
+  end
+
+  def set_WWWauthenticate_header(conn,
+    %APISex.Authenticator.Unauthorized{reason: :credentials_not_found},
+    opts
+  ) do
     conn
     |> APISex.set_WWWauthenticate_challenge("Basic", %{"realm" => "#{opts[:realm]}"})
-    |> Plug.Conn.resp(:unauthorized, "")
+  end
+
+  def set_WWWauthenticate_header(conn, error, opts) do
+    send_error_response(conn, error, opts)
   end
 end
