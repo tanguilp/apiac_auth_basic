@@ -80,18 +80,19 @@ defmodule APISexAuthBasic do
 
     Return `nil` if the client could not be gound for this realm
   """
-  @type callback_fun :: (APISex.realm, APISex.client -> Expwd.Hashed.t | client_secret | nil)
-  @type client_secret :: String.t
+  @type callback_fun ::
+          (APISex.realm(), APISex.client() -> Expwd.Hashed.t() | client_secret | nil)
+  @type client_secret :: String.t()
 
   @doc """
   Plug initialization callback
   """
 
   @impl Plug
-  @spec init(Plug.opts) :: Plug.opts
+  @spec init(Plug.opts()) :: Plug.opts()
   def init(opts) do
     if is_binary(opts[:realm]) and not APISex.rfc7230_quotedstring?("\"#{opts[:realm]}\""),
-      do: raise "Invalid realm string (do not conform with RFC7230 quoted string)"
+      do: raise("Invalid realm string (do not conform with RFC7230 quoted string)")
 
     realm = if opts[:realm], do: opts[:realm], else: @default_realm
 
@@ -109,7 +110,7 @@ defmodule APISexAuthBasic do
   """
 
   @impl Plug
-  @spec call(Plug.Conn, Plug.opts) :: Plug.Conn
+  @spec call(Plug.Conn, Plug.opts()) :: Plug.Conn
   def call(conn, %{} = opts) do
     with {:ok, conn, credentials} <- extract_credentials(conn, opts),
          {:ok, conn} <- validate_credentials(conn, credentials, opts) do
@@ -146,28 +147,35 @@ defmodule APISexAuthBasic do
                 if not ctl_char?(client_secret) and not ctl_char?(client_secret) do
                   {:ok, conn, {client_id, client_secret}}
                 else
-                  {:error,
-                    conn,
-                    %APISex.Authenticator.Unauthorized{
-                      authenticator: __MODULE__,
-                      reason: :invalid_client_id_or_client_secret}}
+                  {:error, conn,
+                   %APISex.Authenticator.Unauthorized{
+                     authenticator: __MODULE__,
+                     reason: :invalid_client_id_or_client_secret
+                   }}
                 end
 
               _ ->
-                {:error, conn, %APISex.Authenticator.Unauthorized{
-                  authenticator: __MODULE__,
-                  reason: :invalid_credential_format}}
+                {:error, conn,
+                 %APISex.Authenticator.Unauthorized{
+                   authenticator: __MODULE__,
+                   reason: :invalid_credential_format
+                 }}
             end
 
           _ ->
-            {:error, conn, %APISex.Authenticator.Unauthorized{
-              authenticator: __MODULE__,
-              reason: :invalid_credential_format}}
+            {:error, conn,
+             %APISex.Authenticator.Unauthorized{
+               authenticator: __MODULE__,
+               reason: :invalid_credential_format
+             }}
         end
+
       _ ->
-        {:error, conn, %APISex.Authenticator.Unauthorized{
-          authenticator: __MODULE__,
-          reason: :credentials_not_found}}
+        {:error, conn,
+         %APISex.Authenticator.Unauthorized{
+           authenticator: __MODULE__,
+           reason: :credentials_not_found
+         }}
     end
   end
 
@@ -181,12 +189,11 @@ defmodule APISexAuthBasic do
 
   @impl APISex.Authenticator
   def validate_credentials(conn, {client_id, client_secret}, %{callback: callback} = opts)
-  when is_function(callback) do
+      when is_function(callback) do
     case callback.(opts[:realm], client_id) do
       nil ->
         {:error, conn,
-          %APISex.Authenticator.Unauthorized{authenticator: __MODULE__,
-            reason: :client_not_found}}
+         %APISex.Authenticator.Unauthorized{authenticator: __MODULE__, reason: :client_not_found}}
 
       stored_client_secret ->
         if Expwd.secure_compare(client_secret, stored_client_secret) == true do
@@ -199,8 +206,10 @@ defmodule APISexAuthBasic do
           {:ok, conn}
         else
           {:error, conn,
-            %APISex.Authenticator.Unauthorized{authenticator: __MODULE__,
-              reason: :invalid_client_secret}}
+           %APISex.Authenticator.Unauthorized{
+             authenticator: __MODULE__,
+             reason: :invalid_client_secret
+           }}
         end
     end
   end
@@ -210,17 +219,17 @@ defmodule APISexAuthBasic do
     case List.keyfind(opts[:clients], client_id, 0) do
       nil ->
         {:error, conn,
-          %APISex.Authenticator.Unauthorized{authenticator: __MODULE__,
-            reason: :client_not_found}}
+         %APISex.Authenticator.Unauthorized{authenticator: __MODULE__, reason: :client_not_found}}
 
       {_stored_client_id, stored_client_secret} ->
-        cs = case stored_client_secret do
-          {:expwd, alg, b64_secret} when is_atom(alg) and is_binary(b64_secret) ->
-            Expwd.Hashed.Portable.from_portable(stored_client_secret)
+        cs =
+          case stored_client_secret do
+            {:expwd, alg, b64_secret} when is_atom(alg) and is_binary(b64_secret) ->
+              Expwd.Hashed.Portable.from_portable(stored_client_secret)
 
-          str when is_binary(str) ->
-            str
-        end
+            str when is_binary(str) ->
+              str
+          end
 
         if Expwd.secure_compare(client_secret, cs) == true do
           conn =
@@ -232,8 +241,10 @@ defmodule APISexAuthBasic do
           {:ok, conn}
         else
           {:error, conn,
-            %APISex.Authenticator.Unauthorized{authenticator: __MODULE__,
-              reason: :invalid_client_secret}}
+           %APISex.Authenticator.Unauthorized{
+             authenticator: __MODULE__,
+             reason: :invalid_client_secret
+           }}
         end
     end
   end
@@ -292,17 +303,20 @@ defmodule APISexAuthBasic do
   Raises a exception when the error response verbosity is set to `:minimal` since
   it does not set the `WWW-Authenticate` header.
   """
-  @spec set_WWWauthenticate_header(Plug.Conn.t(),
-                                   %APISex.Authenticator.Unauthorized{},
-                                   any()) :: Plug.Conn.t()
-  def set_WWWauthenticate_header(_conn, _err, %{:error_response_verbosity => :minimal }) do
+  @spec set_WWWauthenticate_header(
+          Plug.Conn.t(),
+          %APISex.Authenticator.Unauthorized{},
+          any()
+        ) :: Plug.Conn.t()
+  def set_WWWauthenticate_header(_conn, _err, %{:error_response_verbosity => :minimal}) do
     raise "#{__ENV__.function} not accepted when :error_response_verbosity is set to :minimal"
   end
 
-  def set_WWWauthenticate_header(conn,
-    %APISex.Authenticator.Unauthorized{reason: :credentials_not_found},
-    opts
-  ) do
+  def set_WWWauthenticate_header(
+        conn,
+        %APISex.Authenticator.Unauthorized{reason: :credentials_not_found},
+        opts
+      ) do
     conn
     |> APISex.set_WWWauthenticate_challenge("Basic", %{"realm" => "#{opts[:realm]}"})
   end
