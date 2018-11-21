@@ -19,7 +19,7 @@ This scheme is also sometimes called *APIKey* by some API managers.
 The callback function will be called with the `realm` and `client` and return string password or an `%Expwd.Hashed{}` struct:
 
 ```elixir
-Plug APISexAuthBasic, realm: "my realm",
+plug APISexAuthBasic, realm: "my realm",
 		      callback: &Module.get_client_password/2
 ```
 
