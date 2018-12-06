@@ -112,6 +112,14 @@ defmodule APISexAuthBasic do
   @impl Plug
   @spec call(Plug.Conn, Plug.opts()) :: Plug.Conn
   def call(conn, %{} = opts) do
+    if APISex.authenticated?(conn) do
+      conn
+    else
+      do_call(conn, opts)
+    end
+  end
+
+  def do_call(conn, opts) do
     with {:ok, conn, credentials} <- extract_credentials(conn, opts),
          {:ok, conn} <- validate_credentials(conn, credentials, opts) do
       conn
@@ -323,5 +331,47 @@ defmodule APISexAuthBasic do
 
   def set_WWWauthenticate_header(conn, error, opts) do
     send_error_response(conn, error, opts)
+  end
+
+  @doc """
+  Saves failure in a `Plug.Conn.t()`'s private field and returns the `conn`
+
+  See the `APISex.AuthFailureResponseData` module for more information.
+  """
+  @spec save_authentication_failure_response(Plug.Conn.t(),
+                                             %APISex.Authenticator.Unauthorized{},
+                                             any()) :: Plug.Conn.t()
+  def save_authentication_failure_response(conn, error, opts) do
+    failure_response_data =
+      case opts[:error_response_verbosity] do
+        :debug ->
+          %APISex.AuthFailureResponseData{
+            module: __MODULE__,
+            reason: error.reason,
+            www_authenticate_header: {"Basic", %{"realm" => "#{opts[:realm]}"}},
+            status_code: :unauthorized,
+            body: Exception.message(error)
+          }
+
+        :normal ->
+          %APISex.AuthFailureResponseData{
+            module: __MODULE__,
+            reason: error.reason,
+            www_authenticate_header: {"Basic", %{"realm" => "#{opts[:realm]}"}},
+            status_code: :unauthorized,
+            body: ""
+          }
+
+        :minimal ->
+          %APISex.AuthFailureResponseData{
+            module: __MODULE__,
+            reason: error.reason,
+            www_authenticate_header: nil,
+            status_code: :unauthorized,
+            body: ""
+          }
+      end
+
+    APISex.AuthFailureResponseData.put(conn, failure_response_data)
   end
 end
