@@ -110,7 +110,7 @@ defmodule APISexAuthBasic do
   """
 
   @impl Plug
-  @spec call(Plug.Conn, Plug.opts()) :: Plug.Conn
+  @spec call(Plug.Conn.t(), Plug.opts()) :: Plug.Conn.t()
   def call(conn, %{} = opts) do
     if APISex.authenticated?(conn) do
       conn
