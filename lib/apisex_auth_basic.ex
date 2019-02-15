@@ -338,9 +338,11 @@ defmodule APISexAuthBasic do
 
   See the `APISex.AuthFailureResponseData` module for more information.
   """
-  @spec save_authentication_failure_response(Plug.Conn.t(),
-                                             %APISex.Authenticator.Unauthorized{},
-                                             any()) :: Plug.Conn.t()
+  @spec save_authentication_failure_response(
+          Plug.Conn.t(),
+          %APISex.Authenticator.Unauthorized{},
+          any()
+        ) :: Plug.Conn.t()
   def save_authentication_failure_response(conn, error, opts) do
     failure_response_data =
       case opts[:error_response_verbosity] do
