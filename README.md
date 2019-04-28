@@ -1,6 +1,6 @@
-# APISexBasicAuth
+# APIacBasicAuth
 
-An `APISex.Authenticator` plug for API authentication using the HTTP `Basic` scheme
+An `APIac.Authenticator` plug for API authentication using the HTTP `Basic` scheme
 
 The HTTP `Basic` scheme simply consists in transmitting a client and its password
 in the `Authorization` HTTP header. It is base64-encoded:
@@ -14,12 +14,22 @@ The decoded value of `Y2xpZW50X2lkOmNsaWVudF9wYXNzd29yZA==` is `client_id:client
 
 This scheme is also sometimes called *APIKey* by some API managers.
 
+## Installation
+
+```elixir
+def deps do
+  [
+    {:apiac_auth_basic, github: "tanguilp/apiac_auth_basic", tag: "v0.2.0"}
+  ]
+end
+```
+
 ## Example with callback function
 
 The callback function will be called with the `realm` and `client` and return string password or an `%Expwd.Hashed{}` struct:
 
 ```elixir
-plug APISexAuthBasic, realm: "my realm",
+plug APIacAuthBasic, realm: "my realm",
 		      callback: &Module.get_client_password/2
 ```
 
@@ -36,7 +46,7 @@ as `Expwd.Hashed.Portable.t`
 
 Pairs a to be set separately for each realm in the `clients` key, as following:
 ``` elixir
-config :apisex_auth_basic,
+config :apiac_auth_basic,
   clients: %{
     # using Expwd Hashed portable password
     "realm_a" => [
@@ -60,6 +70,6 @@ config :apisex_auth_basic,
 the in your Plug pipeline:
 
 ```elixir
-Plug APISexAuthBasic, realm: "realm_a"
+Plug APIacAuthBasic, realm: "realm_a"
 ```
 

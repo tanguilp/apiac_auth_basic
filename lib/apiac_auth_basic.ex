@@ -1,11 +1,11 @@
-defmodule APISexAuthBasic do
+defmodule APIacAuthBasic do
   @behaviour Plug
-  @behaviour APISex.Authenticator
+  @behaviour APIac.Authenticator
 
   use Bitwise
 
   @moduledoc """
-  An `APISex.Authenticator` plug for API authentication using the HTTP `Basic` scheme
+  An `APIac.Authenticator` plug for API authentication using the HTTP `Basic` scheme
 
   The HTTP `Basic` scheme simply consists in transmitting a client and its password
   in the `Authorization` HTTP header. It is base64-encoded:
@@ -36,7 +36,7 @@ defmodule APISexAuthBasic do
     - An `Expwd.Hashed{}` (hashed password)
     - `nil` if the client is not known
   - `set_error_response`: function called when authentication failed. Defaults to
-  `APISexAuthBasic.send_error_response/3`
+  `APIacAuthBasic.send_error_response/3`
   - `error_response_verbosity`: one of `:debug`, `:normal` or `:minimal`.
   Defaults to `:normal`
 
@@ -50,7 +50,7 @@ defmodule APISexAuthBasic do
 
   Pairs a to be set separately for each realm in the `clients` key, as following:
   ``` elixir
-  config :apisex_auth_basic,
+  config :apiac_auth_basic,
     clients: %{
       # using Expwd Hashed portable password
       "realm_a" => [
@@ -81,7 +81,7 @@ defmodule APISexAuthBasic do
     Return `nil` if the client could not be gound for this realm
   """
   @type callback_fun ::
-          (APISex.realm(), APISex.client() -> Expwd.Hashed.t() | client_secret | nil)
+          (APIac.realm(), APIac.client() -> Expwd.Hashed.t() | client_secret | nil)
   @type client_secret :: String.t()
 
   @doc """
@@ -91,7 +91,7 @@ defmodule APISexAuthBasic do
   @impl Plug
   @spec init(Plug.opts()) :: Plug.opts()
   def init(opts) do
-    if is_binary(opts[:realm]) and not APISex.rfc7230_quotedstring?("\"#{opts[:realm]}\""),
+    if is_binary(opts[:realm]) and not APIac.rfc7230_quotedstring?("\"#{opts[:realm]}\""),
       do: raise("Invalid realm string (do not conform with RFC7230 quoted string)")
 
     realm = if opts[:realm], do: opts[:realm], else: @default_realm
@@ -99,9 +99,9 @@ defmodule APISexAuthBasic do
     opts
     |> Enum.into(%{})
     |> Map.put_new(:realm, @default_realm)
-    |> Map.put_new(:clients, Application.get_env(:apisex_auth_basic, :clients)[realm] || [])
+    |> Map.put_new(:clients, Application.get_env(:apiac_auth_basic, :clients)[realm] || [])
     |> Map.put_new(:callback, nil)
-    |> Map.put_new(:set_error_response, &APISexAuthBasic.send_error_response/3)
+    |> Map.put_new(:set_error_response, &APIacAuthBasic.send_error_response/3)
     |> Map.put_new(:error_response_verbosity, :normal)
   end
 
@@ -112,7 +112,7 @@ defmodule APISexAuthBasic do
   @impl Plug
   @spec call(Plug.Conn.t(), Plug.opts()) :: Plug.Conn.t()
   def call(conn, %{} = opts) do
-    if APISex.authenticated?(conn) do
+    if APIac.authenticated?(conn) do
       conn
     else
       do_call(conn, opts)
@@ -124,19 +124,19 @@ defmodule APISexAuthBasic do
          {:ok, conn} <- validate_credentials(conn, credentials, opts) do
       conn
     else
-      {:error, conn, %APISex.Authenticator.Unauthorized{} = error} ->
+      {:error, conn, %APIac.Authenticator.Unauthorized{} = error} ->
         opts[:set_error_response].(conn, error, opts)
     end
   end
 
   @doc """
-  `APISex.Authenticator` credential extractor callback
+  `APIac.Authenticator` credential extractor callback
 
   Returns the credentials under the form `{client_id, client_secret}` where both
   variables are binaries
   """
 
-  @impl APISex.Authenticator
+  @impl APIac.Authenticator
   def extract_credentials(conn, _opts) do
     parse_authz_header(conn)
   end
@@ -156,7 +156,7 @@ defmodule APISexAuthBasic do
                   {:ok, conn, {client_id, client_secret}}
                 else
                   {:error, conn,
-                   %APISex.Authenticator.Unauthorized{
+                   %APIac.Authenticator.Unauthorized{
                      authenticator: __MODULE__,
                      reason: :invalid_client_id_or_client_secret
                    }}
@@ -164,7 +164,7 @@ defmodule APISexAuthBasic do
 
               _ ->
                 {:error, conn,
-                 %APISex.Authenticator.Unauthorized{
+                 %APIac.Authenticator.Unauthorized{
                    authenticator: __MODULE__,
                    reason: :invalid_credential_format
                  }}
@@ -172,7 +172,7 @@ defmodule APISexAuthBasic do
 
           _ ->
             {:error, conn,
-             %APISex.Authenticator.Unauthorized{
+             %APIac.Authenticator.Unauthorized{
                authenticator: __MODULE__,
                reason: :invalid_credential_format
              }}
@@ -180,7 +180,7 @@ defmodule APISexAuthBasic do
 
       _ ->
         {:error, conn,
-         %APISex.Authenticator.Unauthorized{
+         %APIac.Authenticator.Unauthorized{
            authenticator: __MODULE__,
            reason: :credentials_not_found
          }}
@@ -192,29 +192,29 @@ defmodule APISexAuthBasic do
   end
 
   @doc """
-  `APISex.Authenticator` credential validator callback
+  `APIac.Authenticator` credential validator callback
   """
 
-  @impl APISex.Authenticator
+  @impl APIac.Authenticator
   def validate_credentials(conn, {client_id, client_secret}, %{callback: callback} = opts)
       when is_function(callback) do
     case callback.(opts[:realm], client_id) do
       nil ->
         {:error, conn,
-         %APISex.Authenticator.Unauthorized{authenticator: __MODULE__, reason: :client_not_found}}
+         %APIac.Authenticator.Unauthorized{authenticator: __MODULE__, reason: :client_not_found}}
 
       stored_client_secret ->
         if Expwd.secure_compare(client_secret, stored_client_secret) == true do
           conn =
             conn
-            |> Plug.Conn.put_private(:apisex_authenticator, __MODULE__)
-            |> Plug.Conn.put_private(:apisex_client, client_id)
-            |> Plug.Conn.put_private(:apisex_realm, opts[:realm])
+            |> Plug.Conn.put_private(:apiac_authenticator, __MODULE__)
+            |> Plug.Conn.put_private(:apiac_client, client_id)
+            |> Plug.Conn.put_private(:apiac_realm, opts[:realm])
 
           {:ok, conn}
         else
           {:error, conn,
-           %APISex.Authenticator.Unauthorized{
+           %APIac.Authenticator.Unauthorized{
              authenticator: __MODULE__,
              reason: :invalid_client_secret
            }}
@@ -222,12 +222,12 @@ defmodule APISexAuthBasic do
     end
   end
 
-  @impl APISex.Authenticator
+  @impl APIac.Authenticator
   def validate_credentials(conn, {client_id, client_secret}, opts) do
     case List.keyfind(opts[:clients], client_id, 0) do
       nil ->
         {:error, conn,
-         %APISex.Authenticator.Unauthorized{authenticator: __MODULE__, reason: :client_not_found}}
+         %APIac.Authenticator.Unauthorized{authenticator: __MODULE__, reason: :client_not_found}}
 
       {_stored_client_id, stored_client_secret} ->
         cs =
@@ -242,14 +242,14 @@ defmodule APISexAuthBasic do
         if Expwd.secure_compare(client_secret, cs) == true do
           conn =
             conn
-            |> Plug.Conn.put_private(:apisex_authenticator, __MODULE__)
-            |> Plug.Conn.put_private(:apisex_client, client_id)
-            |> Plug.Conn.put_private(:apisex_realm, opts[:realm])
+            |> Plug.Conn.put_private(:apiac_authenticator, __MODULE__)
+            |> Plug.Conn.put_private(:apiac_client, client_id)
+            |> Plug.Conn.put_private(:apiac_realm, opts[:realm])
 
           {:ok, conn}
         else
           {:error, conn,
-           %APISex.Authenticator.Unauthorized{
+           %APIac.Authenticator.Unauthorized{
              authenticator: __MODULE__,
              reason: :invalid_client_secret
            }}
@@ -258,7 +258,7 @@ defmodule APISexAuthBasic do
   end
 
   @doc """
-  Implementation of the `APISex.Authenticator` callback
+  Implementation of the `APIac.Authenticator` callback
 
   ## Verbosity
 
@@ -267,7 +267,7 @@ defmodule APISexAuthBasic do
 
   | Error response verbosity  | HTTP Status        | Headers                                                | Body                                                    |
   |:-------------------------:|--------------------|--------------------------------------------------------|---------------------------------------------------------|
-  | `:debug`                  | Unauthorized (401) | WWW-Authenticate with `Basic` scheme and `realm` param | `APISex.Authenticator.Unauthorized` exception's message |
+  | `:debug`                  | Unauthorized (401) | WWW-Authenticate with `Basic` scheme and `realm` param | `APIac.Authenticator.Unauthorized` exception's message |
   | `:normal`                 | Unauthorized (401) | WWW-Authenticate with `Basic` scheme and `realm` param |                                                         |
   | `:minimal`                | Unauthorized (401) |                                                        |                                                         |
 
@@ -276,18 +276,18 @@ defmodule APISexAuthBasic do
   the `WWW-Authenticate` header.
 
   """
-  @impl APISex.Authenticator
+  @impl APIac.Authenticator
   def send_error_response(conn, error, opts) do
     case opts[:error_response_verbosity] do
       :debug ->
         conn
-        |> APISex.set_WWWauthenticate_challenge("Basic", %{"realm" => "#{opts[:realm]}"})
+        |> APIac.set_WWWauthenticate_challenge("Basic", %{"realm" => "#{opts[:realm]}"})
         |> Plug.Conn.send_resp(:unauthorized, Exception.message(error))
         |> Plug.Conn.halt()
 
       :normal ->
         conn
-        |> APISex.set_WWWauthenticate_challenge("Basic", %{"realm" => "#{opts[:realm]}"})
+        |> APIac.set_WWWauthenticate_challenge("Basic", %{"realm" => "#{opts[:realm]}"})
         |> Plug.Conn.send_resp(:unauthorized, "")
         |> Plug.Conn.halt()
 
@@ -313,7 +313,7 @@ defmodule APISexAuthBasic do
   """
   @spec set_WWWauthenticate_header(
           Plug.Conn.t(),
-          %APISex.Authenticator.Unauthorized{},
+          %APIac.Authenticator.Unauthorized{},
           any()
         ) :: Plug.Conn.t()
   def set_WWWauthenticate_header(_conn, _err, %{:error_response_verbosity => :minimal}) do
@@ -322,11 +322,11 @@ defmodule APISexAuthBasic do
 
   def set_WWWauthenticate_header(
         conn,
-        %APISex.Authenticator.Unauthorized{reason: :credentials_not_found},
+        %APIac.Authenticator.Unauthorized{reason: :credentials_not_found},
         opts
       ) do
     conn
-    |> APISex.set_WWWauthenticate_challenge("Basic", %{"realm" => "#{opts[:realm]}"})
+    |> APIac.set_WWWauthenticate_challenge("Basic", %{"realm" => "#{opts[:realm]}"})
   end
 
   def set_WWWauthenticate_header(conn, error, opts) do
@@ -336,18 +336,18 @@ defmodule APISexAuthBasic do
   @doc """
   Saves failure in a `Plug.Conn.t()`'s private field and returns the `conn`
 
-  See the `APISex.AuthFailureResponseData` module for more information.
+  See the `APIac.AuthFailureResponseData` module for more information.
   """
   @spec save_authentication_failure_response(
           Plug.Conn.t(),
-          %APISex.Authenticator.Unauthorized{},
+          %APIac.Authenticator.Unauthorized{},
           any()
         ) :: Plug.Conn.t()
   def save_authentication_failure_response(conn, error, opts) do
     failure_response_data =
       case opts[:error_response_verbosity] do
         :debug ->
-          %APISex.AuthFailureResponseData{
+          %APIac.AuthFailureResponseData{
             module: __MODULE__,
             reason: error.reason,
             www_authenticate_header: {"Basic", %{"realm" => "#{opts[:realm]}"}},
@@ -356,7 +356,7 @@ defmodule APISexAuthBasic do
           }
 
         :normal ->
-          %APISex.AuthFailureResponseData{
+          %APIac.AuthFailureResponseData{
             module: __MODULE__,
             reason: error.reason,
             www_authenticate_header: {"Basic", %{"realm" => "#{opts[:realm]}"}},
@@ -365,7 +365,7 @@ defmodule APISexAuthBasic do
           }
 
         :minimal ->
-          %APISex.AuthFailureResponseData{
+          %APIac.AuthFailureResponseData{
             module: __MODULE__,
             reason: error.reason,
             www_authenticate_header: nil,
@@ -374,6 +374,6 @@ defmodule APISexAuthBasic do
           }
       end
 
-    APISex.AuthFailureResponseData.put(conn, failure_response_data)
+    APIac.AuthFailureResponseData.put(conn, failure_response_data)
   end
 end

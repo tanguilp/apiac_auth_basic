@@ -1,10 +1,10 @@
-defmodule APISexAuthBasic.Mixfile do
+defmodule APIacAuthBasic.Mixfile do
   use Mix.Project
 
   def project do
     [
-      app: :apisex_auth_basic,
-      version: "0.1.0",
+      app: :apiac_auth_basic,
+      version: "0.2.0",
       elixir: "~> 1.5",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -25,7 +25,7 @@ defmodule APISexAuthBasic.Mixfile do
     [
       {:plug, "~> 1.0"},
       {:expwd, github: "tanguilp/expwd", tag: "master"},
-      {:apisex, github: "tanguilp/apisex", tag: "0.1.0"},
+      {:apiac, github: "tanguilp/apiac", tag: "0.2.0"},
       {:dialyxir, "~> 1.0.0-rc.4", only: [:dev], runtime: false},
       {:ex_doc, "~> 0.19", only: :dev, runtime: false}
     ]

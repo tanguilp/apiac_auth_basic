@@ -1,4 +1,4 @@
-defmodule APISexAuthBasicTest do
+defmodule APIacAuthBasicTest do
   use ExUnit.Case, async: true
   use Plug.Test
 
@@ -8,7 +8,7 @@ defmodule APISexAuthBasicTest do
 
   setup_all do
     Application.put_env(
-      :apisex_auth_basic,
+      :apiac_auth_basic,
       :clients,
       %{
         @test_realm_name => [
@@ -20,8 +20,8 @@ defmodule APISexAuthBasicTest do
     )
   end
 
-  test "Correct credentials - check APISex attributes are correctly set" do
-    opts = APISexAuthBasic.init(realm: @test_realm_name)
+  test "Correct credentials - check APIac attributes are correctly set" do
+    opts = APIacAuthBasic.init(realm: @test_realm_name)
 
     conn =
       conn(:get, "/")
@@ -29,18 +29,18 @@ defmodule APISexAuthBasicTest do
         "authorization",
         "Basic " <> Base.encode64(@valid_client_id <> ":" <> @valid_client_secret)
       )
-      |> APISexAuthBasic.call(opts)
+      |> APIacAuthBasic.call(opts)
 
     refute conn.status == 401
     refute conn.halted
-    assert APISex.authenticated?(conn) == true
-    assert APISex.machine_to_machine?(conn) == true
-    assert APISex.authenticator(conn) == APISexAuthBasic
-    assert APISex.client(conn) == @valid_client_id
+    assert APIac.authenticated?(conn) == true
+    assert APIac.machine_to_machine?(conn) == true
+    assert APIac.authenticator(conn) == APIacAuthBasic
+    assert APIac.client(conn) == @valid_client_id
   end
 
   test "Correct credentials with additional white spaces" do
-    opts = APISexAuthBasic.init(realm: @test_realm_name)
+    opts = APIacAuthBasic.init(realm: @test_realm_name)
 
     conn =
       conn(:get, "/")
@@ -48,14 +48,14 @@ defmodule APISexAuthBasicTest do
         "authorization",
         "Basic      " <> Base.encode64(@valid_client_id <> ":" <> @valid_client_secret)
       )
-      |> APISexAuthBasic.call(opts)
+      |> APIacAuthBasic.call(opts)
 
     refute conn.status == 401
     refute conn.halted
   end
 
   test "Correct credentials with Expwd portable format" do
-    opts = APISexAuthBasic.init(realm: @test_realm_name)
+    opts = APIacAuthBasic.init(realm: @test_realm_name)
 
     conn =
       conn(:get, "/")
@@ -63,14 +63,14 @@ defmodule APISexAuthBasicTest do
         "authorization",
         "Basic " <> Base.encode64("expwd_client:Yg03EosS+2I7XxozZyMfshph1r4khGgLrj92nyEvmak")
       )
-      |> APISexAuthBasic.call(opts)
+      |> APIacAuthBasic.call(opts)
 
     refute conn.status == 401
     refute conn.halted
   end
 
   test "Incorrect credentials" do
-    opts = APISexAuthBasic.init(clients: [{@valid_client_id, @valid_client_secret}])
+    opts = APIacAuthBasic.init(clients: [{@valid_client_id, @valid_client_secret}])
 
     conn =
       conn(:get, "/")
@@ -78,14 +78,14 @@ defmodule APISexAuthBasicTest do
         "authorization",
         "Basic " <> Base.encode64(@valid_client_id <> ":" <> "invalid_secret")
       )
-      |> APISexAuthBasic.call(opts)
+      |> APIacAuthBasic.call(opts)
 
     assert conn.status == 401
     assert conn.halted
   end
 
   test "Check www-authenticate header" do
-    opts = APISexAuthBasic.init(realm: @test_realm_name)
+    opts = APIacAuthBasic.init(realm: @test_realm_name)
 
     conn =
       conn(:get, "/")
@@ -93,21 +93,21 @@ defmodule APISexAuthBasicTest do
         "authorization",
         "Basic " <> Base.encode64(@valid_client_id <> ":" <> "invalid_secret")
       )
-      |> APISexAuthBasic.call(opts)
+      |> APIacAuthBasic.call(opts)
 
     assert ["Basic realm=\"#{@test_realm_name}\""] == get_resp_header(conn, "www-authenticate")
   end
 
-  test "Check APISexAuthBasic.set_WWWauthenticate_header/3 function" do
+  test "Check APIacAuthBasic.set_WWWauthenticate_header/3 function" do
     opts =
-      APISexAuthBasic.init(
+      APIacAuthBasic.init(
         realm: @test_realm_name,
-        set_error_response: &APISexAuthBasic.set_WWWauthenticate_header/3
+        set_error_response: &APIacAuthBasic.set_WWWauthenticate_header/3
       )
 
     conn =
       conn(:get, "/")
-      |> APISexAuthBasic.call(opts)
+      |> APIacAuthBasic.call(opts)
 
     assert ["Basic realm=\"#{@test_realm_name}\""] == get_resp_header(conn, "www-authenticate")
     refute conn.halted
@@ -115,19 +115,19 @@ defmodule APISexAuthBasicTest do
   end
 
   test "Check incorrect authentication scheme" do
-    opts = APISexAuthBasic.init([])
+    opts = APIacAuthBasic.init([])
 
     conn =
       conn(:get, "/")
       |> put_req_header("authorization", "Bearer xaidfnaz")
-      |> APISexAuthBasic.call(opts)
+      |> APIacAuthBasic.call(opts)
 
     assert conn.status == 401
     assert conn.halted
   end
 
   test "Check function callback returning correct secret" do
-    opts = APISexAuthBasic.init(callback: fn _realm, _client_id -> @valid_client_secret end)
+    opts = APIacAuthBasic.init(callback: fn _realm, _client_id -> @valid_client_secret end)
 
     conn =
       conn(:get, "/")
@@ -135,14 +135,14 @@ defmodule APISexAuthBasicTest do
         "authorization",
         "Basic " <> Base.encode64(@valid_client_id <> ":" <> @valid_client_secret)
       )
-      |> APISexAuthBasic.call(opts)
+      |> APIacAuthBasic.call(opts)
 
     refute conn.status == 401
     refute conn.halted
   end
 
   test "Check function callback returning invalid secret" do
-    opts = APISexAuthBasic.init(callback: fn _realm, _client_id -> "invalid client_secret" end)
+    opts = APIacAuthBasic.init(callback: fn _realm, _client_id -> "invalid client_secret" end)
 
     conn =
       conn(:get, "/")
@@ -150,7 +150,7 @@ defmodule APISexAuthBasicTest do
         "authorization",
         "Basic " <> Base.encode64(@valid_client_id <> ":" <> @valid_client_secret)
       )
-      |> APISexAuthBasic.call(opts)
+      |> APIacAuthBasic.call(opts)
 
     assert conn.status == 401
     assert conn.halted
@@ -158,17 +158,17 @@ defmodule APISexAuthBasicTest do
 
   test "Check mutliples realms in www-authenticate header" do
     opts1 =
-      APISexAuthBasic.init(
+      APIacAuthBasic.init(
         realm: "realm1",
-        set_error_response: &APISexAuthBasic.set_WWWauthenticate_header/3
+        set_error_response: &APIacAuthBasic.set_WWWauthenticate_header/3
       )
 
-    opts2 = APISexAuthBasic.init(realm: "realm2")
+    opts2 = APIacAuthBasic.init(realm: "realm2")
 
     conn =
       conn(:get, "/")
-      |> APISexAuthBasic.call(opts1)
-      |> APISexAuthBasic.call(opts2)
+      |> APIacAuthBasic.call(opts1)
+      |> APIacAuthBasic.call(opts2)
 
     assert ["Basic realm=\"realm1\", Basic realm=\"realm2\""] ==
              get_resp_header(conn, "www-authenticate")
