@@ -14,7 +14,7 @@ defmodule APIacAuthBasicTest do
         @test_realm_name => [
           {@valid_client_id, @valid_client_secret},
           # password is "Yg03EosS+2I7XxozZyMfshph1r4khGgLrj92nyEvmak"
-          {"expwd_client", {:expwd, :sha256, "xSE6MkeC+gW7R/lEZKxsWGDs1MlqEV4u693fCBNlV4g"}}
+          {"expwd_client", "expwd:sha256:xSE6MkeC+gW7R/lEZKxsWGDs1MlqEV4u693fCBNlV4g"}
         ]
       }
     )

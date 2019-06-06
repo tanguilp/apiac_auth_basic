@@ -54,14 +54,14 @@ defmodule APIacAuthBasic do
     clients: %{
       # using Expwd Hashed portable password
       "realm_a" => [
-        {"client_1", {:expwd, :sha256, "lYOmCIZUR603rPiIN0agzBHFyZDw9xEtETfbe6Q1ubU"}},
-        {"client_2", {:expwd, :sha256, "mnAWHn1tSHEOCj6sMDIrB9BTRuD4yZkiLbjx9x2i3ug"}},
-        {"client_3", {:expwd, :sha256, "9RYrMJSmXJSN4CSJZtOX0Xs+vP94meTaSzGc+oFcwqM"}},
-        {"client_4", {:expwd, :sha256, "aCL154jd8bNw868cbsCUw3skHun1n6fGYhBiITSmREw"}},
-        {"client_5", {:expwd, :sha256, "xSE6MkeC+gW7R/lEZKxsWGDs1MlqEV4u693fCBNlV4g"}}
+        {"client_1", "expwd:sha256:lYOmCIZUR603rPiIN0agzBHFyZDw9xEtETfbe6Q1ubU"},
+        {"client_2", "expwd:sha256:mnAWHn1tSHEOCj6sMDIrB9BTRuD4yZkiLbjx9x2i3ug"},
+        {"client_3", "expwd:sha256:9RYrMJSmXJSN4CSJZtOX0Xs+vP94meTaSzGc+oFcwqM"},
+        {"client_4", "expwd:sha256:aCL154jd8bNw868cbsCUw3skHun1n6fGYhBiITSmREw"},
+        {"client_5", "expwd:sha256:xSE6MkeC+gW7R/lEZKxsWGDs1MlqEV4u693fCBNlV4g"}
       ],
       "realm_b" => [
-        {"client_1", {:expwd, :sha256, "lYOmCIZUR603rPiIN0agzBHFyZDw9xEtETfbe6Q1ubU"}}
+        {"client_1", "expwd:sha256:lYOmCIZUR603rPiIN0agzBHFyZDw9xEtETfbe6Q1ubU"}
       ],
       # UNSAFE: cleartext passwords set directly in the config file
       "realm_c" => [
@@ -230,16 +230,7 @@ defmodule APIacAuthBasic do
          %APIac.Authenticator.Unauthorized{authenticator: __MODULE__, reason: :client_not_found}}
 
       {_stored_client_id, stored_client_secret} ->
-        cs =
-          case stored_client_secret do
-            {:expwd, alg, b64_secret} when is_atom(alg) and is_binary(b64_secret) ->
-              Expwd.Hashed.Portable.from_portable(stored_client_secret)
-
-            str when is_binary(str) ->
-              str
-          end
-
-        if Expwd.secure_compare(client_secret, cs) == true do
+        if Expwd.secure_compare(client_secret, stored_client_secret) == true do
           conn =
             conn
             |> Plug.Conn.put_private(:apiac_authenticator, __MODULE__)

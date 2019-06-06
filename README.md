@@ -19,7 +19,7 @@ This scheme is also sometimes called *APIKey* by some API managers.
 ```elixir
 def deps do
   [
-    {:apiac_auth_basic, github: "tanguilp/apiac_auth_basic", tag: "v0.2.0"}
+    {:apiac_auth_basic, github: "tanguilp/apiac_auth_basic", tag: "v0.3.0"}
   ]
 end
 ```
